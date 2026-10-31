@@ -14,6 +14,22 @@ Source packages for OpenWrt 25.12 (apk) and the tooling that builds and publishe
 
 Each directory is a regular OpenWrt package recipe, so the repo can also be used as a feed (`src-link r4ven /path/to/this/repo`).
 
+## Connect the repository
+
+On the router (OpenWrt 25.12, `x86_64`):
+
+```sh
+wget -O /etc/apk/keys/r4ven-apk.pub https://r4ven-me.github.io/openwrt/r4ven-apk.pub
+echo https://r4ven-me.github.io/openwrt/25.12/x86_64/packages.adb > /etc/apk/repositories.d/r4ven.list
+apk update
+apk add luci-app-ocserv
+```
+
+Updates then come with the usual `apk update && apk upgrade`. Everything is signed with the `r4ven-apk` key.
+For AmneziaWG install `kmod-amneziawg`, `amneziawg-tools`, `luci-proto-amneziawg`, `luci-app-amneziawg`
+(+ `luci-i18n-amneziawg-ru`) and reboot once. `kmod-amneziawg` is built for the exact kernel of 25.12.6 x86/64 (6.12.112)
+and will not load on another kernel build. More details: `build/gh-pages-README.md`.
+
 ## Layout
 
 - `packages/` - package sources, one directory per package
@@ -28,5 +44,3 @@ Each directory is a regular OpenWrt package recipe, so the repo can also be used
 - `make publish` - build the signed index into `repo-out/<RELEASE>/<ARCH>/`
 - `make publish-push` - push `repo-out/` to the `gh-pages` branch
 - `make clean` - remove built apks
-
-Using the published repository on a router: see `build/gh-pages-README.md`.
