@@ -1,0 +1,6 @@
+*
+!packages/
+!packages/*/
+!packages/*/Makefile
+!packages/kmod-amneziawg/**
+!packages/amneziawg-tools/**

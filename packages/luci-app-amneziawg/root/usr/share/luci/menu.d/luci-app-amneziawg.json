@@ -1,0 +1,36 @@
+{
+	"admin/vpn/amneziawg": {
+		"title": "AmneziaWG",
+		"order": 51,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [ "luci-app-amneziawg" ]
+		}
+	},
+	"admin/vpn/amneziawg/peers": {
+		"title": "Peers",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "amneziawg/peers"
+		}
+	},
+	"admin/vpn/amneziawg/config": {
+		"title": "Config",
+		"order": 2,
+		"action": {
+			"type": "view",
+			"path": "amneziawg/config"
+		}
+	},
+	"admin/vpn/amneziawg/interface": {
+		"title": "Interface",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "amneziawg/interface"
+		}
+	}
+}

@@ -1,0 +1,43 @@
+FROM debian:13-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gawk gettext git libncurses-dev python3 python3-setuptools \
+    rsync unzip zstd wget curl ca-certificates file xz-utils swig libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN useradd -m builder
+USER builder
+WORKDIR /home/builder
+ARG SDK_URL=https://downloads.openwrt.org/releases/25.12.6/targets/x86/64/openwrt-sdk-25.12.6-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+RUN curl -fsSL "$SDK_URL" | tar --zstd -x && mv openwrt-sdk-* sdk
+# Heavy, rarely changing part: feeds, kernel modules and kmod/tools are built once into the image
+RUN cd sdk \
+    && ./scripts/feeds update base packages luci \
+    && ./scripts/feeds install -p luci luci-base \
+    && ./scripts/feeds install pbr
+COPY --chown=builder packages/kmod-amneziawg /home/builder/sdk/package/kmod-amneziawg
+COPY --chown=builder packages/amneziawg-tools /home/builder/sdk/package/amneziawg-tools
+COPY --chown=builder packages/luci-app-amneziawg/Makefile /home/builder/pkgseed/Makefile
+# Final .config with all our packages, so that the real build does not change it
+# (any .config change makes the kernel modules rebuild)
+RUN cd sdk \
+    && mkdir -p package/luci-app-amneziawg \
+    && cp ~/pkgseed/Makefile package/luci-app-amneziawg/ \
+    && sed -i 's#\.\./\.\./luci\.mk#$(TOPDIR)/feeds/luci/luci.mk#' package/luci-app-amneziawg/Makefile \
+    && printf 'CONFIG_PACKAGE_kmod-amneziawg=m\nCONFIG_PACKAGE_amneziawg-tools=m\nCONFIG_PACKAGE_pbr=m\nCONFIG_PACKAGE_luci-app-amneziawg=m\n' >> .config \
+    && make defconfig \
+    && make package/kernel/linux/compile -j"$(nproc)"
+# Sources come from github: retry, the connection is sometimes reset
+RUN cd sdk \
+    && for i in 1 2 3 4 5; do \
+         make package/kmod-amneziawg/download package/amneziawg-tools/download && break; sleep 10; \
+       done
+RUN cd sdk \
+    && make package/kmod-amneziawg/compile package/amneziawg-tools/compile package/luci-app-amneziawg/compile -j"$(nproc)"
+# luci-proto-amneziawg: layers after the kernel ones, so that those stay cached
+RUN cd sdk && ./scripts/feeds install luci-lib-uqr resolveip
+COPY --chown=builder packages/luci-proto-amneziawg/Makefile /home/builder/protoseed/Makefile
+RUN cd sdk \
+    && mkdir -p package/luci-proto-amneziawg \
+    && cp ~/protoseed/Makefile package/luci-proto-amneziawg/ \
+    && printf 'CONFIG_PACKAGE_luci-proto-amneziawg=m\nCONFIG_PACKAGE_luci-lib-uqr=m\nCONFIG_PACKAGE_resolveip=m\n' >> .config \
+    && make defconfig \
+    && make package/luci-proto-amneziawg/compile -j"$(nproc)"

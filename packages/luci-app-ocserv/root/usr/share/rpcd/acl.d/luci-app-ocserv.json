@@ -1,0 +1,96 @@
+{
+	"luci-app-ocserv": {
+		"description": "Grant UCI access for luci-app-ocserv",
+		"read": {
+			"file": {
+				"/etc/ocserv/*": [
+					"read"
+				],
+				"/proc/net/ipv6_route": [
+					"read"
+				],
+				"/proc/*/net/ipv6_route": [
+					"read"
+				],
+				"/usr/bin/certtool --hash sha256 --key-id --infile /etc/ocserv/server-cert.pem": [
+					"exec"
+				],
+				"/usr/bin/occtl show users": [
+					"exec"
+				],
+				"/usr/bin/occtl --json show users": [
+					"exec"
+				],
+				"/usr/bin/occtl reload": [
+					"exec"
+				],
+				"/usr/bin/occtl disconnect id *": [
+					"exec"
+				],
+				"/etc/ocserv/config-per-user": [
+					"list"
+				],
+				"/etc/ocserv/config-per-group": [
+					"list"
+				],
+				"/etc/ocserv/config-per-user/*": [
+					"read"
+				],
+				"/etc/ocserv/config-per-group/*": [
+					"read"
+				],
+				"/bin/mkdir -p /etc/ocserv/config-per-user": [
+					"exec"
+				],
+				"/bin/mkdir -p /etc/ocserv/config-per-group": [
+					"exec"
+				]
+			},
+			"ubus": {
+				"file": [
+					"exec"
+				],
+				"rc": [
+					"init"
+				],
+				"luci.ocserv-pki": [
+					"list"
+				]
+			},
+			"uci": [
+				"ocserv"
+			]
+		},
+		"write": {
+			"file": {
+				"/etc/ocserv/ocserv.conf.template": [
+					"write"
+				],
+				"/etc/ocserv/config-per-user/*": [
+					"write"
+				],
+				"/etc/ocserv/config-per-group/*": [
+					"write"
+				]
+			},
+			"ubus": {
+				"file": [
+					"exec"
+				],
+				"rc": [
+					"init"
+				],
+				"luci.ocserv-pki": [
+					"issue",
+					"revoke",
+					"set_user",
+					"get_file",
+					"apply_auth"
+				]
+			},
+			"uci": [
+				"ocserv"
+			]
+		}
+	}
+}

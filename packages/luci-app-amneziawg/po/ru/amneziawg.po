@@ -1,0 +1,374 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-amneziawg\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Junk packet count (Jc)"
+msgstr "Число мусорных пакетов (Jc)"
+
+msgid "Junk packet min size (Jmin)"
+msgstr "Мин. размер мусорного пакета (Jmin)"
+
+msgid "Junk packet max size (Jmax)"
+msgstr "Макс. размер мусорного пакета (Jmax)"
+
+msgid "Init packet junk size (S1)"
+msgstr "Мусор в init-пакете (S1)"
+
+msgid "Response packet junk size (S2)"
+msgstr "Мусор в response-пакете (S2)"
+
+msgid "Cookie reply packet junk size (S3)"
+msgstr "Мусор в cookie-reply-пакете (S3)"
+
+msgid "Transport packet junk size (S4)"
+msgstr "Мусор в transport-пакете (S4)"
+
+msgid "Init magic header (H1)"
+msgstr "Магический заголовок init (H1)"
+
+msgid "Response magic header (H2)"
+msgstr "Магический заголовок response (H2)"
+
+msgid "Cookie reply magic header (H3)"
+msgstr "Магический заголовок cookie reply (H3)"
+
+msgid "Transport magic header (H4)"
+msgstr "Магический заголовок transport (H4)"
+
+msgid "Special junk packet 1 (I1)"
+msgstr "Специальный мусорный пакет 1 (I1)"
+
+msgid "Special junk packet 2 (I2)"
+msgstr "Специальный мусорный пакет 2 (I2)"
+
+msgid "Special junk packet 3 (I3)"
+msgstr "Специальный мусорный пакет 3 (I3)"
+
+msgid "Special junk packet 4 (I4)"
+msgstr "Специальный мусорный пакет 4 (I4)"
+
+msgid "Special junk packet 5 (I5)"
+msgstr "Специальный мусорный пакет 5 (I5)"
+
+msgid "never"
+msgstr "никогда"
+
+msgid "%d s ago"
+msgstr "%d с назад"
+
+msgid "%d min ago"
+msgstr "%d мин назад"
+
+msgid "%d h ago"
+msgstr "%d ч назад"
+
+msgid "%d d ago"
+msgstr "%d д назад"
+
+msgid "Port must be 1-65535."
+msgstr "Порт должен быть 1–65535."
+
+msgid "MTU and keepalive must be numbers."
+msgstr "MTU и keepalive должны быть числами."
+
+msgid "Saved. The new values are used in client configs generated from now on; already imported configs keep the old ones."
+msgstr "Сохранено. Новые значения попадут в конфиги клиентов, созданные с этого момента; уже импортированные конфиги останутся прежними."
+
+msgid "AmneziaWG is not set up yet. Open the Peers page first."
+msgstr "AmneziaWG ещё не настроен. Сначала откройте страницу «Пиры»."
+
+msgid "Connection"
+msgstr "Подключение"
+
+msgid "Host"
+msgstr "Хост"
+
+msgid "Public address or name clients connect to."
+msgstr "Публичный адрес или имя, к которому подключаются клиенты."
+
+msgid "Port"
+msgstr "Порт"
+
+msgid "Public UDP port clients connect to (can differ from the listen port when forwarded)."
+msgstr "Публичный UDP-порт для клиентов (может отличаться от порта сервера при пробросе)."
+
+msgid "Allowed IPs"
+msgstr "Allowed IPs"
+
+msgid "Traffic for these networks goes through the tunnel."
+msgstr "Трафик в эти сети идёт через туннель."
+
+msgid "DNS"
+msgstr "DNS"
+
+msgid "DNS servers"
+msgstr "DNS-серверы"
+
+msgid "Handed to clients. With per-client filtering these stay reachable."
+msgstr "Передаются клиентам. При фильтрации по клиентам остаются доступными."
+
+msgid "Advanced"
+msgstr "Дополнительно"
+
+msgid "MTU"
+msgstr "MTU"
+
+msgid "Empty: the client default."
+msgstr "Пусто: значение клиента по умолчанию."
+
+msgid "Persistent keepalive"
+msgstr "Persistent keepalive"
+
+msgid "Seconds; 0 disables it."
+msgstr "Секунды; 0 отключает."
+
+msgid "AmneziaWG obfuscation parameters (client)"
+msgstr "Параметры обфускации AmneziaWG (клиент)"
+
+msgid "Empty means the same value as on the server. S1-S4 and H1-H4 always match the server."
+msgstr "Пусто — то же значение, что на сервере. S1–S4 и H1–H4 всегда совпадают с сервером."
+
+msgid "AmneziaWG"
+msgstr "AmneziaWG"
+
+msgid "Config"
+msgstr "Конфиг"
+
+msgid "MTU must be 576-1500."
+msgstr "MTU должен быть 576–1500."
+
+msgid "Applying…"
+msgstr "Применение…"
+
+msgid "The interface is restarted, connected clients reconnect."
+msgstr "Интерфейс перезапускается, подключённые клиенты переподключатся."
+
+msgid "Saved. The port or the S/H parameters changed: clients need new configs."
+msgstr "Сохранено. Изменились порт или параметры S/H: клиентам нужны новые конфиги."
+
+msgid "Saved."
+msgstr "Сохранено."
+
+msgid "Change CIDR"
+msgstr "Сменить CIDR"
+
+msgid "The server and all peers are renumbered into the new subnet: the server gets the first address, peers keep their order. pbr policies and per-client rules follow."
+msgstr "Сервер и все пиры перенумеровываются в новую подсеть: сервер получает первый адрес, пиры сохраняют порядок. Политики pbr и правила по клиентам обновляются."
+
+msgid "All clients need new configs afterwards and are disconnected until then."
+msgstr "После этого всем клиентам нужны новые конфиги, до тех пор они отключены."
+
+msgid "Server address (CIDR)"
+msgstr "Адрес сервера (CIDR)"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "The subnet was changed. Clients need new configs."
+msgstr "Подсеть изменена. Клиентам нужны новые конфиги."
+
+msgid "Change"
+msgstr "Сменить"
+
+msgid "Restart the interface? Connected clients reconnect."
+msgstr "Перезапустить интерфейс? Подключённые клиенты переподключатся."
+
+msgid "The interface was restarted."
+msgstr "Интерфейс перезапущен."
+
+msgid "no masquerading"
+msgstr "без маскарадинга"
+
+msgid "Interface"
+msgstr "Интерфейс"
+
+msgid "Interface %s, server address %s."
+msgstr "Интерфейс %s, адрес сервера %s."
+
+msgid "UDP listen port; the firewall rule follows."
+msgstr "UDP-порт сервера; правило файрвола меняется вместе с ним."
+
+msgid "Reach zones"
+msgstr "Доступные зоны"
+
+msgid "Firewall zones the clients may go to. NAT happens in zones with masquerading (wan by default)."
+msgstr "Зоны файрвола, в которые разрешено ходить клиентам. NAT выполняется в зонах с маскарадингом (по умолчанию wan)."
+
+msgid "AmneziaWG obfuscation parameters"
+msgstr "Параметры обфускации AmneziaWG"
+
+msgid "Values depend on the MTU. S1-S4 and H1-H4 must be the same on clients."
+msgstr "Значения зависят от MTU. S1–S4 и H1–H4 должны совпадать у клиентов."
+
+msgid "Generate"
+msgstr "Сгенерировать"
+
+msgid "Traffic filtering"
+msgstr "Фильтрация трафика"
+
+msgid "Enable per-client firewall"
+msgstr "Включить файрвол по клиентам"
+
+msgid "A client with allowed destinations set on the Peers page may reach only those (and the DNS servers); everything else is rejected."
+msgstr "Клиент с заданными на странице «Пиры» разрешёнными адресами может ходить только на них (и на DNS-серверы); всё остальное отклоняется."
+
+msgid "Actions"
+msgstr "Действия"
+
+msgid "These act immediately, they do not wait for Save & Apply."
+msgstr "Эти действия выполняются сразу, они не ждут «Сохранить и применить»."
+
+msgid "Restart interface"
+msgstr "Перезапустить интерфейс"
+
+msgid "Client config: %s"
+msgstr "Конфиг клиента: %s"
+
+msgid "QR code for %s"
+msgstr "QR-код для %s"
+
+msgid "Download QR"
+msgstr "Скачать QR"
+
+msgid "Download .conf"
+msgstr "Скачать .conf"
+
+msgid "Close"
+msgstr "Закрыть"
+
+msgid "Allowed destinations: %s"
+msgstr "Разрешённые адреса: %s"
+
+msgid "One address or network per line. Empty: no restriction. Only effective when per-client firewall is enabled on the Interface page; the client DNS servers always stay reachable."
+msgstr "По одному адресу или сети в строке. Пусто — без ограничений. Работает, только если на странице «Интерфейс» включён файрвол по клиентам; DNS-серверы клиента остаются доступными."
+
+msgid "Save"
+msgstr "Сохранить"
+
+msgid "Address of %s"
+msgstr "Адрес %s"
+
+msgid "Any free host address of the server subnet. The client needs a new config afterwards."
+msgstr "Любой свободный адрес подсети сервера. После этого клиенту нужен новый конфиг."
+
+msgid "IP address"
+msgstr "IP-адрес"
+
+msgid "The address was changed. Download a new config for %s."
+msgstr "Адрес изменён. Скачайте новый конфиг для %s."
+
+msgid "Default route"
+msgstr "Маршрут по умолчанию"
+
+msgid "Edit"
+msgstr "Изменить"
+
+msgid "any"
+msgstr "любые"
+
+msgid "Config / QR"
+msgstr "Конфиг / QR"
+
+msgid "Delete peer %s?"
+msgstr "Удалить пира %s?"
+
+msgid "Delete"
+msgstr "Удалить"
+
+msgid "Name"
+msgstr "Имя"
+
+msgid "Address"
+msgstr "Адрес"
+
+msgid "Endpoint"
+msgstr "Эндпоинт"
+
+msgid "Last handshake"
+msgstr "Последний handshake"
+
+msgid "Traffic"
+msgstr "Трафик"
+
+msgid "Enabled"
+msgstr "Включён"
+
+msgid "Exit interface"
+msgstr "Исходящий интерфейс"
+
+msgid "Allowed destinations"
+msgstr "Разрешённые адреса"
+
+msgid "No peers yet."
+msgstr "Пиров пока нет."
+
+msgid "Peer name"
+msgstr "Имя пира"
+
+msgid "IP address (optional)"
+msgstr "IP-адрес (необязательно)"
+
+msgid "Name may contain only letters, digits, \".\", \"_\" and \"-\"."
+msgstr "Имя может содержать только буквы, цифры, \".\", \"_\" и \"-\"."
+
+msgid "Add peer"
+msgstr "Добавить пира"
+
+msgid "Without an IP address the next free one of the server subnet is used."
+msgstr "Если адрес не указан, берётся следующий свободный адрес подсети сервера."
+
+msgid "AmneziaWG is not set up yet. This creates the interface, a firewall zone with forwarding to lan and wan, and random obfuscation parameters. Everything can be changed later on the Config and Interface pages."
+msgstr "AmneziaWG ещё не настроен. Будут созданы интерфейс, зона файрвола с форвардингом в lan и wan и случайные параметры обфускации. Всё можно изменить позже на страницах «Конфиг» и «Интерфейс»."
+
+msgid "UDP port"
+msgstr "UDP-порт"
+
+msgid "Public host"
+msgstr "Публичный хост"
+
+msgid "Address or name clients connect to."
+msgstr "Адрес или имя, к которому подключаются клиенты."
+
+msgid "Client DNS"
+msgstr "DNS клиента"
+
+msgid "Comma separated."
+msgstr "Через запятую."
+
+msgid "Set up"
+msgstr "Настроить"
+
+msgid "Server %s"
+msgstr "Сервер %s"
+
+msgid "up"
+msgstr "поднят"
+
+msgid "down"
+msgstr "не поднят"
+
+msgid "address %s, UDP port %d, endpoint %s."
+msgstr "адрес %s, UDP-порт %d, эндпоинт %s."
+
+msgid "Server settings are on the Config and Interface pages."
+msgstr "Настройки сервера — на страницах «Конфиг» и «Интерфейс»."
+
+msgid "Peers"
+msgstr "Пиры"
+
+msgid "The pbr package is not installed: per-peer exit interfaces are unavailable."
+msgstr "Пакет pbr не установлен: выбор исходящего интерфейса для пиров недоступен."
+
+msgid "Unsaved changes: press Save & Apply below to apply them or Reset to discard."
+msgstr "Есть неприменённые изменения: нажмите «Сохранить и применить» внизу или «Сбросить», чтобы отменить."
+
+msgid "No changes to apply."
+msgstr "Нет изменений для применения."
+
+msgid "Changes applied."
+msgstr "Изменения применены."

@@ -1,0 +1,245 @@
+'use strict';
+'require rpc';
+'require ui';
+
+/* Client certificate management for OpenConnect VPN.
+   Licensed to the public under the Apache License 2.0.
+*/
+
+const callList = rpc.declare({
+	object: 'luci.ocserv-pki',
+	method: 'list',
+	expect: { '': {} }
+});
+
+const callIssue = rpc.declare({
+	object: 'luci.ocserv-pki',
+	method: 'issue',
+	params: [ 'cn', 'days', 'password', 'ip', 'via' ],
+	expect: { '': {} }
+});
+
+const callSetUser = rpc.declare({
+	object: 'luci.ocserv-pki',
+	method: 'set_user',
+	params: [ 'cn', 'ip', 'via' ],
+	expect: { '': {} }
+});
+
+const callGetFile = rpc.declare({
+	object: 'luci.ocserv-pki',
+	method: 'get_file',
+	params: [ 'cn', 'kind' ],
+	expect: { '': {} }
+});
+
+const callRevoke = rpc.declare({
+	object: 'luci.ocserv-pki',
+	method: 'revoke',
+	params: [ 'serial' ],
+	expect: { '': {} }
+});
+
+return L.view.extend({
+	load() {
+		return L.resolveDefault(callList(), {});
+	},
+
+	handleIssue() {
+		const cn = this.cnInput.value.trim();
+		const days = parseInt(this.daysInput.value, 10);
+		const pw = this.pwInput.value;
+
+		if (!/^[A-Za-z0-9._-]{1,64}$/.test(cn))
+			return ui.addNotification(null, E('p', _('Name may contain only letters, digits, ".", "_" and "-".')), 'error');
+		if (!(days >= 1 && days <= 36500))
+			return ui.addNotification(null, E('p', _('Invalid validity period.')), 'error');
+		if (!pw)
+			return ui.addNotification(null, E('p', _('The PKCS#12 password must not be empty.')), 'error');
+
+		ui.showModal(_('Generating certificate…'), [ E('p', { 'class': 'spinning' }, _('Please wait.')) ]);
+
+		return callIssue(cn, days, pw, this.ipInput.value.trim(), this.viaSelect.value).then(res => {
+			ui.hideModal();
+			if (res.error)
+				ui.addNotification(null, E('p', res.error), 'error');
+			else {
+				if (res.warning)
+					ui.addNotification(null, E('p', res.warning), 'warning');
+				return this.reload();
+			}
+		}).catch(e => {
+			ui.hideModal();
+			ui.addNotification(null, E('p', e.message), 'error');
+		});
+	},
+
+	handleRevoke(cert) {
+		if (!confirm(_('Revoke certificate "%s"?').format(cert.cn)))
+			return;
+
+		return callRevoke(cert.serial).then(res => {
+			if (res.error)
+				ui.addNotification(null, E('p', res.error), 'error');
+			else
+				return this.reload();
+		});
+	},
+
+	handleDownload(cert, kind) {
+		return callGetFile(cert.cn, kind).then(res => {
+			if (res.error)
+				throw new Error(res.error);
+			const bin = atob(res.data);
+			const bytes = new Uint8Array(bin.length);
+			for (let i = 0; i < bin.length; i++)
+				bytes[i] = bin.charCodeAt(i);
+			const url = URL.createObjectURL(new Blob([ bytes ], { type: 'application/octet-stream' }));
+			const a = E('a', { href: url, download: res.name });
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+		}).catch(e => {
+			ui.addNotification(null, E('p', _('Download failed: %s').format(e.message)), 'error');
+		});
+	},
+
+	handleSetUser(cert, ipInput, viaSelect) {
+		return callSetUser(cert.cn, ipInput.value.trim(), viaSelect.value).then(res => {
+			if (res.error)
+				ui.addNotification(null, E('p', res.error), 'error');
+			else {
+				if (res.warning)
+					ui.addNotification(null, E('p', res.warning), 'warning');
+				return this.reload();
+			}
+		});
+	},
+
+	viaSelectEl(selected) {
+		const opts = [ E('option', { 'value': '' }, _('Default route')) ];
+		const names = this.ifaces.slice();
+		if (selected && names.indexOf(selected) < 0)
+			names.push(selected);
+		names.forEach(n => opts.push(E('option', { 'value': n, 'selected': n == selected ? '' : null }, n)));
+		return E('select', { 'class': 'cbi-input-select', 'disabled': this.pbr ? null : '' }, opts);
+	},
+
+	reload() {
+		return callList().then(data => {
+			this.ifaces = data.ifaces || [];
+			this.pbr = data.pbr !== false;
+			this.fillTable(data);
+		});
+	},
+
+	fillTable(data) {
+		const certs = data.certs || [];
+		const rows = certs.map(c => {
+			const valid = c.status == 'valid';
+			const ip = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'value': c.ip, 'size': 14, 'disabled': valid ? null : '' });
+			const via = this.viaSelectEl(c.via);
+			via.disabled = !valid || !this.pbr;
+			const dl = (kind, label, has) => has ? E('button', {
+				'class': 'cbi-button cbi-button-action',
+				'click': ui.createHandlerFn(this, 'handleDownload', c, kind)
+			}, label) : '';
+
+			return E('tr', { 'class': 'tr' }, [
+				E('td', { 'class': 'td' }, c.cn),
+				E('td', { 'class': 'td' }, valid ? ip : c.ip),
+				E('td', { 'class': 'td' }, valid ? via : ''),
+				E('td', { 'class': 'td' }, c.expires),
+				E('td', { 'class': 'td' }, c.status == 'revoked' ? _('Revoked') + ' (' + c.revoked + ')' : _('Valid')),
+				E('td', { 'class': 'td cbi-section-actions' }, valid ? [
+					E('button', {
+						'class': 'cbi-button cbi-button-save',
+						'click': ui.createHandlerFn(this, 'handleSetUser', c, ip, via)
+					}, _('Save')),
+					' ', dl('crt', _('Certificate'), c.has_crt),
+					' ', dl('key', _('Private key'), c.has_key),
+					' ', dl('p12', '.p12', c.has_p12),
+					' ', E('button', {
+						'class': 'cbi-button cbi-button-negative',
+						'click': ui.createHandlerFn(this, 'handleRevoke', c)
+					}, _('Revoke'))
+				] : '')
+			]);
+		});
+
+		const head = E('tr', { 'class': 'tr table-titles' }, [
+			E('th', { 'class': 'th' }, _('Name')),
+			E('th', { 'class': 'th' }, _('IPv4 address')),
+			E('th', { 'class': 'th' }, _('Exit interface')),
+			E('th', { 'class': 'th' }, _('Expires')),
+			E('th', { 'class': 'th' }, _('Status')),
+			E('th', { 'class': 'th cbi-section-actions' }, '')
+		]);
+
+		if (!rows.length)
+			rows.push(E('tr', { 'class': 'tr placeholder' }, E('td', { 'class': 'td', 'colspan': 6 },
+				E('em', _('No certificates have been issued yet.')))));
+
+		this.table.replaceChildren(head, ...rows);
+	},
+
+	render(data) {
+		this.ifaces = data.ifaces || [];
+		this.pbr = data.pbr !== false;
+		this.cnInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': 'alice' });
+		this.daysInput = E('input', { 'type': 'number', 'class': 'cbi-input-text', 'value': 365, 'min': 1 });
+		this.pwInput = E('input', { 'type': 'password', 'class': 'cbi-input-password', 'autocomplete': 'new-password' });
+		this.ipInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': _('automatic') });
+		this.viaSelect = this.viaSelectEl('');
+		this.table = E('table', { 'class': 'table' });
+		this.fillTable(data);
+
+		return E('div', [
+			E('h2', _('OpenConnect VPN: client certificates')),
+			E('div', { 'class': 'cbi-map-descr' },
+				_('Certificates are signed by the server CA and exported as a password-protected PKCS#12 (.p12) file for import into the client. Enable "certificate" authentication on the Server Settings page to use them.')),
+			data.pbr === false ? E('div', { 'class': 'alert-message warning' },
+				_('The pbr package is not installed: the exit interface cannot be chosen.')) : '',
+			data.ca === false ? E('div', { 'class': 'alert-message warning' },
+				_('The CA certificate was not found in /etc/ocserv. Start the ocserv service once so that it is created.')) : '',
+
+			E('div', { 'class': 'cbi-section' }, [
+				E('h3', _('Issue a new certificate')),
+				E('div', { 'class': 'cbi-value' }, [
+					E('label', { 'class': 'cbi-value-title' }, _('Name (CN / user name)')),
+					E('div', { 'class': 'cbi-value-field' }, this.cnInput)
+				]),
+				E('div', { 'class': 'cbi-value' }, [
+					E('label', { 'class': 'cbi-value-title' }, _('Valid for (days)')),
+					E('div', { 'class': 'cbi-value-field' }, this.daysInput)
+				]),
+				E('div', { 'class': 'cbi-value' }, [
+					E('label', { 'class': 'cbi-value-title' }, _('PKCS#12 password')),
+					E('div', { 'class': 'cbi-value-field' }, this.pwInput)
+				]),
+				E('div', { 'class': 'cbi-value' }, [
+					E('label', { 'class': 'cbi-value-title' }, _('IPv4 address')),
+					E('div', { 'class': 'cbi-value-field' }, this.ipInput)
+				]),
+				E('div', { 'class': 'cbi-value' }, [
+					E('label', { 'class': 'cbi-value-title' }, _('Exit interface')),
+					E('div', { 'class': 'cbi-value-field' }, this.viaSelect)
+				]),
+				E('button', {
+					'class': 'cbi-button cbi-button-add',
+					'click': ui.createHandlerFn(this, 'handleIssue')
+				}, _('Generate'))
+			]),
+
+			E('div', { 'class': 'cbi-section' }, [
+				E('h3', _('Issued certificates')),
+				this.table
+			])
+		]);
+	},
+
+	handleSave: null,
+	handleSaveApply: null,
+	handleReset: null
+});

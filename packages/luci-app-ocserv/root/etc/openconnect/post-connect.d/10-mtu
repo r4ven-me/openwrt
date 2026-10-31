@@ -1,0 +1,18 @@
+# Sourced by /lib/netifd/vpnc-script (run_hooks post-connect) once the tunnel is up.
+# The stock script computes the MTU but never applies it, and netifd does not touch
+# the tun device that openconnect creates, so "Override MTU" (network.<if>.mtu, which
+# openconnect only uses as a "legacy servers" request) has no effect on its own.
+# Apply network.<if>.mtu if set, else the MTU announced by the server.
+# Sourced, not executed: no exit, no shebang; variables are prefixed to stay out of the way.
+_oc_if="${TUNDEV#vpn-}"
+_oc_mtu="$(uci -q get "network.$_oc_if.mtu")"
+_oc_src=override
+[ -n "$_oc_mtu" ] || { _oc_mtu="$INTERNAL_IP4_MTU"; _oc_src=server; }
+if [ -n "$_oc_mtu" ]; then
+	if ip link set dev "$TUNDEV" mtu "$_oc_mtu"; then
+		logger -t openconnect-mtu "$TUNDEV mtu $_oc_mtu ($_oc_src)"
+	else
+		logger -t openconnect-mtu "failed to set $TUNDEV mtu $_oc_mtu ($_oc_src)"
+	fi
+fi
+unset _oc_if _oc_mtu _oc_src

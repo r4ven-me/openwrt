@@ -1,0 +1,486 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-amneziawg\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Junk packet count (Jc)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Junk packet min size (Jmin)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Junk packet max size (Jmax)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Init packet junk size (S1)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Response packet junk size (S2)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Cookie reply packet junk size (S3)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Transport packet junk size (S4)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Init magic header (H1)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Response magic header (H2)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Cookie reply magic header (H3)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Transport magic header (H4)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Special junk packet 1 (I1)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Special junk packet 2 (I2)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Special junk packet 3 (I3)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Special junk packet 4 (I4)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "Special junk packet 5 (I5)"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "never"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "%d s ago"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "%d min ago"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "%d h ago"
+msgstr ""
+
+#: htdocs/luci-static/resources/amneziawg/common.js
+msgid "%d d ago"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Port must be 1-65535."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "MTU and keepalive must be numbers."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Saved. The new values are used in client configs generated from now on; already imported configs keep the old ones."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "AmneziaWG is not set up yet. Open the Peers page first."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Connection"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Host"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Public address or name clients connect to."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Port"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Public UDP port clients connect to (can differ from the listen port when forwarded)."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Allowed IPs"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Traffic for these networks goes through the tunnel."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "DNS"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "DNS servers"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Handed to clients. With per-client filtering these stay reachable."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Advanced"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "MTU"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Empty: the client default."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Persistent keepalive"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Seconds; 0 disables it."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "AmneziaWG obfuscation parameters (client)"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Empty means the same value as on the server. S1-S4 and H1-H4 always match the server."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "AmneziaWG"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/config.js
+msgid "Config"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "MTU must be 576-1500."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Applying…"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "The interface is restarted, connected clients reconnect."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Saved. The port or the S/H parameters changed: clients need new configs."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Saved."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Change CIDR"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "The server and all peers are renumbered into the new subnet: the server gets the first address, peers keep their order. pbr policies and per-client rules follow."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "All clients need new configs afterwards and are disconnected until then."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Server address (CIDR)"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Cancel"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "The subnet was changed. Clients need new configs."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Change"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Restart the interface? Connected clients reconnect."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "The interface was restarted."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "no masquerading"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Interface"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Interface %s, server address %s."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "UDP listen port; the firewall rule follows."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Reach zones"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Firewall zones the clients may go to. NAT happens in zones with masquerading (wan by default)."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "AmneziaWG obfuscation parameters"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Values depend on the MTU. S1-S4 and H1-H4 must be the same on clients."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Generate"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Traffic filtering"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Enable per-client firewall"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "A client with allowed destinations set on the Peers page may reach only those (and the DNS servers); everything else is rejected."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Actions"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "These act immediately, they do not wait for Save & Apply."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/interface.js
+msgid "Restart interface"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Client config: %s"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Download .conf"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Close"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Allowed destinations: %s"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "One address or network per line. Empty: no restriction. Only effective when per-client firewall is enabled on the Interface page; the client DNS servers always stay reachable."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Save"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Address of %s"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Any free host address of the server subnet. The client needs a new config afterwards."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "IP address"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "The address was changed. Download a new config for %s."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Default route"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Edit"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "any"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Config / QR"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Delete peer %s?"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Delete"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Name"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Address"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Endpoint"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Last handshake"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Traffic"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Enabled"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Exit interface"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Allowed destinations"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "No peers yet."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Peer name"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "IP address (optional)"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Name may contain only letters, digits, \".\", \"_\" and \"-\"."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Add peer"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Without an IP address the next free one of the server subnet is used."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "AmneziaWG is not set up yet. This creates the interface, a firewall zone with forwarding to lan and wan, and random obfuscation parameters. Everything can be changed later on the Config and Interface pages."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "UDP port"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Public host"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Address or name clients connect to."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Client DNS"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Comma separated."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Set up"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Server %s"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "up"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "down"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "address %s, UDP port %d, endpoint %s."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Server settings are on the Config and Interface pages."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Peers"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "The pbr package is not installed: per-peer exit interfaces are unavailable."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Unsaved changes: press Save & Apply below to apply them or Reset to discard."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "No changes to apply."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/amneziawg/peers.js
+msgid "Changes applied."
+msgstr ""

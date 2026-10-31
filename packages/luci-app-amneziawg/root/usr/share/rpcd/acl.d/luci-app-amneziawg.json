@@ -1,0 +1,32 @@
+{
+	"luci-app-amneziawg": {
+		"description": "Grant access to AmneziaWG server and peer management",
+		"read": {
+			"ubus": {
+				"luci.amneziawg-peers": [
+					"list",
+					"get_settings",
+					"gen_obfuscation"
+				]
+			}
+		},
+		"write": {
+			"ubus": {
+				"luci.amneziawg-peers": [
+					"setup",
+					"set_config",
+					"set_interface",
+					"restart_interface",
+					"change_cidr",
+					"add_peer",
+					"set_peer_address",
+					"remove_peer",
+					"set_enabled",
+					"set_route",
+					"set_peer_filter",
+					"get_config"
+				]
+			}
+		}
+	}
+}

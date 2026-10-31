@@ -1,0 +1,1233 @@
+'use strict';
+
+/*
+ * rpcd ucode plugin: server and peer management for luci-app-amneziawg.
+ *
+ * State lives in three places:
+ *  - /etc/config/amneziawg: our own data (client-facing settings, peers incl. the
+ *    client private keys needed to render client configs, per-peer filters);
+ *  - network.<iface> / network.amneziawg_<iface> sections: what netifd feeds to the kernel;
+ *  - firewall (zone "awg", forwardings, awgfw_* per-peer rules) and pbr (policy awg_<peer>).
+ *
+ * Licensed to the public under the Apache License 2.0.
+ */
+
+import * as fs from 'fs';
+import { cursor } from 'uci';
+
+const CONF = '/etc/config/amneziawg';
+const PEER_NAME_RE = /^[A-Za-z0-9._-]+$/;
+const IFACE_RE = /^[a-z][a-z0-9_]{0,14}$/;
+const HOST_RE = /^([A-Za-z0-9._-]+|[0-9a-fA-F:]+)$/;
+const ZONE_RE = /^[A-Za-z0-9_-]+$/;
+const FW_PREFIX = 'awgfw_';
+
+/* all obfuscation parameters of the server interface (network.<if>.awg_<key>) */
+const OBF_KEYS = [ 'jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4', 'i1', 'i2', 'i3', 'i4', 'i5' ];
+/* the ones that may differ between client and server (the rest must match) */
+const CLIENT_OBF_KEYS = [ 'jc', 'jmin', 'jmax', 'i1', 'i2', 'i3', 'i4', 'i5' ];
+
+function sh(s) {
+	return "'" + replace(s ?? '', "'", "'\\''") + "'";
+}
+
+function out(cmd) {
+	let p = fs.popen(cmd + ' 2>/dev/null');
+	let r = p ? trim(p.read('all')) : '';
+	if (p)
+		p.close();
+	return r;
+}
+
+function run(argv) {
+	return system(argv, 30000) == 0;
+}
+
+function ensure_conf() {
+	if (!fs.access(CONF)) {
+		fs.writefile(CONF, '');
+		fs.chmod(CONF, 0600);
+	}
+}
+
+function ctx() {
+	ensure_conf();
+	return cursor();
+}
+
+function valid_name(n) {
+	return type(n) == 'string' && length(n) >= 1 && length(n) <= 64 && match(n, PEER_NAME_RE) != null;
+}
+
+function valid_int(v, lo, hi) {
+	return type(v) == 'int' && v >= lo && v <= hi;
+}
+
+function genkey() { return out('awg genkey'); }
+function genpsk() { return out('awg genpsk'); }
+function pubkey(priv) { return out('printf %s ' + sh(priv) + ' | awg pubkey'); }
+
+/* "a, b c" or ['a','b'] -> ['a','b'] */
+function as_list(v) {
+	if (v == null)
+		return [];
+	if (type(v) == 'array')
+		return filter(map(v, x => trim('' + x)), x => x != '');
+	return filter(split(trim('' + v), /[ ,]+/), x => x != '');
+}
+
+function ip4_to_int(s) {
+	let m = match(s ?? '', /^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/);
+	if (!m)
+		return null;
+	let o = [ +m[1], +m[2], +m[3], +m[4] ];
+	for (let x in o)
+		if (x > 255)
+			return null;
+	return o[0] * 16777216 + o[1] * 65536 + o[2] * 256 + o[3];
+}
+
+/* "10.8.0.1/24" -> { ip, mask, base, size } as integers */
+function parse_cidr(s) {
+	let m = match(s ?? '', /^([0-9.]+)\/([0-9]{1,2})$/);
+	if (!m)
+		return null;
+	let ip = ip4_to_int(m[1]), mask = +m[2];
+	if (ip == null || mask < 16 || mask > 30)
+		return null;
+	let size = 1 << (32 - mask);
+	return { ip, mask, size, base: ip - (ip % size) };
+}
+
+function int2ip(n) {
+	return sprintf('%d.%d.%d.%d', (n >> 24) & 255, (n >> 16) & 255, (n >> 8) & 255, n & 255);
+}
+
+/* IPv4/IPv6 address or network, optionally with a prefix length */
+function valid_ipnet(s) {
+	if (type(s) != 'string')
+		return false;
+	let m = match(s, /^([0-9a-fA-F:.]+)(\/([0-9]{1,3}))?$/);
+	if (!m)
+		return false;
+	let pfx = m[3] != null ? +m[3] : null;
+	if (index(m[1], ':') >= 0)
+		return match(m[1], /^[0-9a-fA-F:]+$/) != null && length(m[1]) >= 2 && (pfx == null || pfx <= 128);
+	return ip4_to_int(m[1]) != null && (pfx == null || pfx <= 32);
+}
+
+function valid_iplist(l) {
+	for (let x in l)
+		if (!valid_ipnet(x))
+			return false;
+	return true;
+}
+
+function urand32() {
+	let b = fs.open('/dev/urandom', 'r');
+	let s = b.read(4);
+	b.close();
+	return ord(s, 0) * 16777216 + ord(s, 1) * 65536 + ord(s, 2) * 256 + ord(s, 3);
+}
+
+function rr(lo, hi) {
+	return lo + urand32() % (hi - lo + 1);
+}
+
+/* AmneziaWG 2.0 obfuscation parameters; H1..H4 are non-overlapping ranges */
+function gen_obfuscation() {
+	let jmin = rr(8, 40), jmax = jmin + rr(40, 400);
+	let p = {
+		jc: rr(4, 12), jmin, jmax,
+		s1: rr(15, 150), s2: rr(15, 150), s3: rr(15, 150), s4: rr(15, 150)
+	};
+	while (p.s1 + 56 == p.s2)
+		p.s2 = rr(15, 150);
+
+	let band = 1000000000;
+	for (let i = 1; i <= 4; i++) {
+		let lo = 5 + (i - 1) * band + rr(0, band / 4);
+		p['h' + i] = lo + '-' + (lo + rr(1000, band / 4));
+	}
+	return p;
+}
+
+/* "123" or "123-456" -> [lo, hi], null if invalid */
+function parse_range(s) {
+	let m = match('' + (s ?? ''), /^([0-9]{1,10})(-([0-9]{1,10}))?$/);
+	if (!m)
+		return null;
+	let lo = +m[1], hi = m[3] != null ? +m[3] : lo;
+	if (lo > hi || hi > 4294967295)
+		return null;
+	return [ lo, hi ];
+}
+
+/* returns an error string or null; o holds string values keyed by OBF_KEYS */
+function check_obf(o, mtu) {
+	let n = (k) => (o[k] == null || o[k] == '') ? null : o[k];
+	let num = (k, lo, hi) => {
+		let v = n(k);
+		if (v == null)
+			return true;
+		return match('' + v, /^[0-9]{1,5}$/) != null && +v >= lo && +v <= hi;
+	};
+
+	if (!num('jc', 0, 128)) return 'Jc must be 0-128';
+	if (!num('jmin', 0, 1280)) return 'Jmin must be 0-1280';
+	if (!num('jmax', 0, 1280)) return 'Jmax must be 0-1280';
+	if (n('jmin') != null && n('jmax') != null && +n('jmin') > +n('jmax'))
+		return 'Jmin must not exceed Jmax';
+	if (n('jmax') != null && mtu && +n('jmax') >= mtu)
+		return 'Jmax must be smaller than the MTU';
+	for (let k in [ 's1', 's2', 's3', 's4' ])
+		if (!num(k, 0, 1132))
+			return uc(k) + ' must be 0-1132';
+	if (n('s1') != null && n('s2') != null && +n('s1') + 56 == +n('s2'))
+		return 'S1 + 56 must not equal S2';
+
+	let ranges = [];
+	let any = 0;
+	for (let k in [ 'h1', 'h2', 'h3', 'h4' ])
+		if (n(k) != null)
+			any++;
+	if (any && any != 4)
+		return 'H1-H4 must be set all together';
+	if (any) {
+		for (let k in [ 'h1', 'h2', 'h3', 'h4' ]) {
+			let r = parse_range(o[k]);
+			if (!r)
+				return uc(k) + ' must be a number or a range lo-hi (up to 4294967295)';
+			push(ranges, r);
+		}
+		for (let i = 0; i < 4; i++)
+			for (let j = i + 1; j < 4; j++)
+				if (ranges[i][0] <= ranges[j][1] && ranges[j][0] <= ranges[i][1])
+					return 'H1-H4 ranges must not overlap';
+	}
+
+	for (let k in [ 'i1', 'i2', 'i3', 'i4', 'i5' ]) {
+		let v = n(k);
+		if (v != null && !match(v, /^(<(b 0x[0-9a-fA-F]+|r [0-9]+|rc [0-9]+|rd [0-9]+|c|t)>)+$/))
+			return uc(k) + ' must consist of tags <b 0x..> <r N> <rc N> <rd N> <c> <t>';
+	}
+	return null;
+}
+
+function server_of(c) {
+	let name = null;
+	c.foreach('amneziawg', 'server', s => { name = name ?? s['.name']; });
+	return name ? c.get_all('amneziawg', name) : null;
+}
+
+function peers_of(c) {
+	let res = [];
+	c.foreach('amneziawg', 'peer', p => push(res, p));
+	return res;
+}
+
+function find_peer(c, name) {
+	for (let p in peers_of(c))
+		if (p.name == name)
+			return p;
+	return null;
+}
+
+function net_section_of(c, iface, pub) {
+	let found = null;
+	c.foreach('network', 'amneziawg_' + iface, s => {
+		if (s.public_key == pub)
+			found = s['.name'];
+	});
+	return found;
+}
+
+function policy_of(c, peer_name) {
+	let found = null;
+	c.foreach('pbr', 'policy', s => {
+		if (s.name == 'awg_' + peer_name)
+			found = s['.name'];
+	});
+	return found;
+}
+
+function reload_pbr() {
+	if (fs.access('/etc/init.d/pbr'))
+		system([ '/etc/init.d/pbr', 'reload' ], 30000);
+}
+
+function reload_firewall() {
+	system([ '/etc/init.d/firewall', 'reload' ], 30000);
+}
+
+function reload_network() {
+	system([ '/bin/ubus', 'call', 'network', 'reload' ], 30000);
+}
+
+/* client-facing settings, with migration of the first release (endpoint="host:port", dns/allowed ips as strings) */
+function settings_of(c, srv) {
+	let host = srv.host, port = srv.port != null ? +srv.port : null;
+	if (!host && srv.endpoint) {
+		let m = match(srv.endpoint, /^\[?([^\]]+?)\]?:([0-9]+)$/);
+		host = m ? m[1] : srv.endpoint;
+		port = port ?? (m ? +m[2] : null);
+	}
+	let obf = {};
+	for (let k in CLIENT_OBF_KEYS)
+		obf[k] = srv['client_awg_' + k] ?? '';
+	return {
+		host: host ?? '',
+		port: port ?? +(c.get('network', srv.iface, 'listen_port') ?? 0),
+		dns: as_list(srv.dns),
+		allowed_ips: as_list(srv.client_allowed_ips ?? '0.0.0.0/0, ::/0'),
+		mtu: srv.client_mtu != null && srv.client_mtu != '' ? +srv.client_mtu : null,
+		keepalive: srv.client_keepalive != null && srv.client_keepalive != '' ? +srv.client_keepalive : 25,
+		obf
+	};
+}
+
+function endpoint_of(st) {
+	return (index(st.host, ':') >= 0 ? '[' + st.host + ']' : st.host) + ':' + st.port;
+}
+
+function interface_obf(c, iface) {
+	let o = {};
+	for (let k in OBF_KEYS)
+		o[k] = c.get('network', iface, 'awg_' + k) ?? '';
+	return o;
+}
+
+/* live status from "awg show <if> dump": peer lines are tab separated */
+function live_status(iface) {
+	let res = {};
+	let dump = out('awg show ' + sh(iface) + ' dump');
+	let lines = split(dump, '\n');
+	for (let i = 1; i < length(lines); i++) {
+		let f = split(lines[i], '\t');
+		if (length(f) < 8)
+			continue;
+		res[f[0]] = {
+			endpoint: f[2] == '(none)' ? null : f[2],
+			handshake: +f[4],
+			rx: +f[5],
+			tx: +f[6]
+		};
+	}
+	return res;
+}
+
+function view(p, status) {
+	let st = status[p.public_key] ?? {};
+	return {
+		name: p.name,
+		address: p.address,
+		public_key: p.public_key,
+		via: p.via ?? '',
+		dest: as_list(p.dest),
+		enabled: p.enabled != '0',
+		endpoint: st.endpoint ?? null,
+		handshake: st.handshake ?? 0,
+		rx: st.rx ?? 0,
+		tx: st.tx ?? 0
+	};
+}
+
+function client_config(c, srv, p) {
+	let iface = srv.iface;
+	let st = settings_of(c, srv);
+	let spub = pubkey(c.get('network', iface, 'private_key'));
+	let lines = [
+		'[Interface]',
+		'PrivateKey = ' + p.private_key,
+		'Address = ' + p.address + '/32'
+	];
+	if (length(st.dns))
+		push(lines, 'DNS = ' + join(', ', st.dns));
+	if (st.mtu)
+		push(lines, 'MTU = ' + st.mtu);
+	for (let k in OBF_KEYS) {
+		/* Jc/Jmin/Jmax/I1-I5 may be overridden for clients, the rest must match the server */
+		let v = (k in CLIENT_OBF_KEYS && st.obf[k] != '') ? st.obf[k] : c.get('network', iface, 'awg_' + k);
+		if (v != null && v != '')
+			push(lines, uc(substr(k, 0, 1)) + substr(k, 1) + ' = ' + v);
+	}
+	push(lines, '', '[Peer]', 'PublicKey = ' + spub);
+	if (p.psk)
+		push(lines, 'PresharedKey = ' + p.psk);
+	push(lines, 'AllowedIPs = ' + join(', ', st.allowed_ips));
+	push(lines, 'Endpoint = ' + endpoint_of(st));
+	if (st.keepalive > 0)
+		push(lines, 'PersistentKeepalive = ' + st.keepalive);
+	push(lines, '');
+	return join('\n', lines);
+}
+
+function server_net(c, srv) {
+	return parse_cidr(c.get('network', srv.iface, 'addresses')?.[0]);
+}
+
+function used_addresses(c, except_name) {
+	let used = {};
+	for (let p in peers_of(c)) {
+		if (except_name != null && p.name == except_name)
+			continue;
+		let n = ip4_to_int(p.address);
+		if (n != null)
+			used[n] = true;
+	}
+	return used;
+}
+
+/* the lowest unused host address of the server subnet, null if the subnet is full */
+function free_address(c, srv) {
+	let net = server_net(c, srv);
+	if (!net)
+		return null;
+	let used = used_addresses(c, null);
+	used[net.ip] = true;
+	for (let i = net.base + 1; i < net.base + net.size - 1; i++)
+		if (!used[i])
+			return int2ip(i);
+	return null;
+}
+
+/* error text or null; except_name is the peer that may keep its own address */
+function check_address(c, srv, addr, except_name) {
+	let n = ip4_to_int(addr);
+	if (n == null)
+		return 'Invalid IP address';
+	let net = server_net(c, srv);
+	if (!net)
+		return 'Cannot read server address';
+	if (n <= net.base || n >= net.base + net.size - 1)
+		return 'The address must be a host address inside the server subnet ' + int2ip(net.base) + '/' + net.mask;
+	if (n == net.ip)
+		return 'This is the server address';
+	if (used_addresses(c, except_name)[n])
+		return 'The address is already used by another peer';
+	return null;
+}
+
+function awg_set_peer(iface, pub, psk, ip, keepalive) {
+	let p = fs.popen('awg set ' + sh(iface) + ' peer ' + sh(pub) + ' preshared-key /dev/stdin allowed-ips ' +
+	                 sh(ip + '/32') + ' persistent-keepalive ' + (+keepalive || 0) + ' 2>/dev/null', 'w');
+	if (!p)
+		return false;
+	p.write(psk + '\n');
+	return p.close() == 0;
+}
+
+function awg_remove_peer(iface, pub) {
+	run([ 'awg', 'set', iface, 'peer', pub, 'remove' ]);
+}
+
+/*
+ * An exit interface must sit in a firewall zone that clients may be forwarded to, and that zone must
+ * masquerade (the clients' tunnel addresses are unknown upstream). Creates the zone/forwarding when
+ * missing; returns { zone, created, warning } and leaves existing zones alone (only warns about masq).
+ * c must have 'firewall' loaded. Commits and reloads the firewall only if something changed.
+ */
+function ensure_exit_zone(c, via) {
+	let zone = null, zsid = null;
+	c.foreach('firewall', 'zone', z => {
+		if (z.name != 'awg' && (via in as_list(z.network))) {
+			zone = z.name;
+			zsid = z['.name'];
+		}
+	});
+
+	let changed = false, created = false, warning = null;
+	if (!zone) {
+		/* fw4 zone names are limited to 11 characters */
+		zone = substr('vpn_' + via, 0, 11);
+		zsid = 'awg_exit_' + via;
+		c.set('firewall', zsid, 'zone');
+		c.set('firewall', zsid, 'name', zone);
+		c.set('firewall', zsid, 'network', [ via ]);
+		c.set('firewall', zsid, 'input', 'REJECT');
+		c.set('firewall', zsid, 'output', 'ACCEPT');
+		c.set('firewall', zsid, 'forward', 'REJECT');
+		c.set('firewall', zsid, 'masq', '1');
+		c.set('firewall', zsid, 'mtu_fix', '1');
+		changed = created = true;
+	}
+	else if (c.get('firewall', zsid, 'masq') != '1') {
+		warning = 'The firewall zone "' + zone + '" of ' + via + ' has no masquerading: replies from upstream may not come back';
+	}
+
+	let fwd = false;
+	c.foreach('firewall', 'forwarding', f => {
+		if (f.src == 'awg' && f.dest == zone)
+			fwd = true;
+	});
+	if (!fwd) {
+		let n = 'awg_fwd_' + replace(zone, '-', '_');
+		c.set('firewall', n, 'forwarding');
+		c.set('firewall', n, 'src', 'awg');
+		c.set('firewall', n, 'dest', zone);
+		changed = true;
+	}
+
+	if (changed) {
+		c.commit('firewall');
+		reload_firewall();
+	}
+	return { zone, created, warning };
+}
+
+/* via = '' removes the policy (client uses the default route) */
+function apply_route(name, via) {
+	if (!valid_name(name))
+		return { error: 'Invalid name' };
+	if (via != null && via != '' && !match(via, /^[A-Za-z0-9_]+$/))
+		return { error: 'Invalid interface' };
+	if (!fs.access('/etc/init.d/pbr'))
+		return { error: 'The pbr package is not installed' };
+
+	let c = ctx();
+	c.load('amneziawg');
+	c.load('pbr');
+	c.load('firewall');
+	let p = find_peer(c, name);
+	if (!p)
+		return { error: 'Peer not found' };
+
+	let exit = via ? ensure_exit_zone(c, via) : null;
+
+	let pol = policy_of(c, name);
+	if (!via) {
+		if (pol)
+			c.delete('pbr', pol);
+	} else {
+		if (!pol)
+			pol = c.add('pbr', 'policy');
+		c.set('pbr', pol, 'name', 'awg_' + name);
+		c.set('pbr', pol, 'src_addr', p.address);
+		c.set('pbr', pol, 'interface', via);
+		c.set('pbr', pol, 'enabled', '1');
+		/* pbr ships disabled; policies do nothing until it is switched on */
+		if (c.get('pbr', 'config', 'enabled') != '1')
+			c.set('pbr', 'config', 'enabled', '1');
+	}
+	c.commit('pbr');
+
+	c.set('amneziawg', p['.name'], 'via', via ?? '');
+	c.commit('amneziawg');
+	reload_pbr();
+	return exit?.warning ? { ok: true, warning: exit.warning } : { ok: true };
+}
+
+/*
+ * Rebuilds the per-peer firewall rules (awgfw_*) from our config. For a peer with a non-empty
+ * destination list: ACCEPT to those destinations (+ the client DNS servers), REJECT the rest.
+ * c must have 'amneziawg' and 'firewall' loaded; commits firewall and reloads it.
+ */
+function sync_firewall(c) {
+	let srv = server_of(c);
+
+	let old = [];
+	c.foreach('firewall', 'rule', s => {
+		if (index(s['.name'], FW_PREFIX) == 0)
+			push(old, s['.name']);
+	});
+	for (let n in old)
+		c.delete('firewall', n);
+
+	if (srv && srv.filter == '1') {
+		let dns = settings_of(c, srv).dns;
+		let i = 0;
+		for (let p in peers_of(c)) {
+			i++;
+			let dest = as_list(p.dest);
+			if (!length(dest) || p.enabled == '0')
+				continue;
+
+			let allow = FW_PREFIX + i + '_allow', deny = FW_PREFIX + i + '_deny';
+			c.set('firewall', allow, 'rule');
+			c.set('firewall', allow, 'name', 'AWG-' + p.name + '-allow');
+			c.set('firewall', allow, 'src', 'awg');
+			c.set('firewall', allow, 'src_ip', p.address);
+			c.set('firewall', allow, 'proto', 'all');
+			c.set('firewall', allow, 'dest', '*');
+			c.set('firewall', allow, 'dest_ip', [ ...dest, ...filter(dns, d => !(d in dest)) ]);
+			c.set('firewall', allow, 'target', 'ACCEPT');
+
+			c.set('firewall', deny, 'rule');
+			c.set('firewall', deny, 'name', 'AWG-' + p.name + '-deny');
+			c.set('firewall', deny, 'src', 'awg');
+			c.set('firewall', deny, 'src_ip', p.address);
+			c.set('firewall', deny, 'proto', 'all');
+			c.set('firewall', deny, 'dest', '*');
+			c.set('firewall', deny, 'target', 'REJECT');
+		}
+	}
+	c.commit('firewall');
+	reload_firewall();
+}
+
+function set_or_delete(c, cfg, sid, opt, v) {
+	if (v == null || v == '' || (type(v) == 'array' && !length(v)))
+		c.delete(cfg, sid, opt);
+	else
+		c.set(cfg, sid, opt, v);
+}
+
+const methods = {
+	/* peers with live status and the interfaces usable as exits (peers page) */
+	list: {
+		args: {},
+		call: function() {
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('network');
+			let srv = server_of(c);
+			if (!srv)
+				return { configured: false };
+
+			let status = live_status(srv.iface);
+			let peers = map(peers_of(c), p => view(p, status));
+
+			let ifaces = [];
+			c.foreach('network', 'interface', s => {
+				let n = s['.name'];
+				if (n != 'loopback' && n != srv.iface && s.proto != 'amneziawg')
+					push(ifaces, n);
+			});
+
+			let st = settings_of(c, srv);
+			return {
+				configured: true,
+				iface: srv.iface,
+				endpoint: endpoint_of(st),
+				address: c.get('network', srv.iface, 'addresses')?.[0] ?? null,
+				port: +(c.get('network', srv.iface, 'listen_port') ?? 0),
+				up: length(out('awg show ' + sh(srv.iface))) > 0,
+				pbr: fs.access('/etc/init.d/pbr') ? true : false,
+				filter: srv.filter == '1',
+				peers,
+				interfaces: ifaces
+			};
+		}
+	},
+
+	/* everything the Config and Interface pages show */
+	get_settings: {
+		args: {},
+		call: function() {
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('network');
+			c.load('firewall');
+			let srv = server_of(c);
+			if (!srv)
+				return { configured: false };
+
+			let zones = [], forward = [];
+			c.foreach('firewall', 'zone', z => {
+				if (z.name != 'awg')
+					push(zones, { name: z.name, masq: z.masq == '1' });
+			});
+			c.foreach('firewall', 'forwarding', f => {
+				if (f.src == 'awg')
+					push(forward, f.dest);
+			});
+
+			return {
+				configured: true,
+				iface: srv.iface,
+				config: settings_of(c, srv),
+				interface: {
+					address: c.get('network', srv.iface, 'addresses')?.[0] ?? null,
+					port: +(c.get('network', srv.iface, 'listen_port') ?? 0),
+					mtu: c.get('network', srv.iface, 'mtu') != null ? +c.get('network', srv.iface, 'mtu') : null,
+					obf: interface_obf(c, srv.iface),
+					zones,
+					forward,
+					filter: srv.filter == '1'
+				}
+			};
+		}
+	},
+
+	/* new random obfuscation values for the form; nothing is saved */
+	gen_obfuscation: {
+		args: {},
+		call: function() {
+			let o = gen_obfuscation();
+			for (let k in keys(o))
+				o[k] = '' + o[k];
+			return { obf: o };
+		}
+	},
+
+	/* creates the server interface, firewall zone and our config */
+	setup: {
+		args: { iface: 'awg0', address: '10.8.0.1/24', port: 51820, host: 'vpn.example.com', dns: [ '1.1.1.1' ] },
+		call: function(req) {
+			let iface = req.args.iface;
+			let address = req.args.address;
+			let port = req.args.port;
+			let host = req.args.host;
+			let dns = as_list(req.args.dns);
+			if (type(iface) != 'string' || !match(iface, IFACE_RE))
+				return { error: 'Invalid interface name' };
+			if (!parse_cidr(address))
+				return { error: 'Invalid server address (expected IPv4 CIDR, mask 16-30)' };
+			if (!valid_int(port, 1, 65535))
+				return { error: 'Invalid port' };
+			host = trim(replace(replace(host ?? '', '[', ''), ']', ''));
+			if (!match(host, HOST_RE))
+				return { error: 'Invalid host' };
+			if (!valid_iplist(dns))
+				return { error: 'Invalid DNS server' };
+
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('network');
+			c.load('firewall');
+			if (server_of(c))
+				return { error: 'Already configured' };
+			if (c.get('network', iface))
+				return { error: 'Interface ' + iface + ' already exists in network config' };
+
+			let priv = genkey();
+			if (!priv)
+				return { error: 'awg genkey failed (is amneziawg-tools installed?)' };
+
+			c.set('network', iface, 'interface');
+			c.set('network', iface, 'proto', 'amneziawg');
+			c.set('network', iface, 'private_key', priv);
+			c.set('network', iface, 'listen_port', '' + port);
+			c.set('network', iface, 'addresses', [ address ]);
+			let obf = gen_obfuscation();
+			for (let k in keys(obf))
+				c.set('network', iface, 'awg_' + k, '' + obf[k]);
+			c.commit('network');
+
+			c.set('firewall', 'awg_zone', 'zone');
+			c.set('firewall', 'awg_zone', 'name', 'awg');
+			c.set('firewall', 'awg_zone', 'network', [ iface ]);
+			c.set('firewall', 'awg_zone', 'input', 'ACCEPT');
+			c.set('firewall', 'awg_zone', 'output', 'ACCEPT');
+			c.set('firewall', 'awg_zone', 'forward', 'ACCEPT');
+			c.set('firewall', 'awg_fwd_wan', 'forwarding');
+			c.set('firewall', 'awg_fwd_wan', 'src', 'awg');
+			c.set('firewall', 'awg_fwd_wan', 'dest', 'wan');
+			c.set('firewall', 'awg_fwd_lan', 'forwarding');
+			c.set('firewall', 'awg_fwd_lan', 'src', 'awg');
+			c.set('firewall', 'awg_fwd_lan', 'dest', 'lan');
+			c.set('firewall', 'awg_in', 'rule');
+			c.set('firewall', 'awg_in', 'name', 'Allow-AmneziaWG');
+			c.set('firewall', 'awg_in', 'src', 'wan');
+			c.set('firewall', 'awg_in', 'proto', 'udp');
+			c.set('firewall', 'awg_in', 'dest_port', '' + port);
+			c.set('firewall', 'awg_in', 'target', 'ACCEPT');
+			c.commit('firewall');
+
+			c.set('amneziawg', 'main', 'server');
+			c.set('amneziawg', 'main', 'iface', iface);
+			c.set('amneziawg', 'main', 'host', host);
+			c.set('amneziawg', 'main', 'port', '' + port);
+			if (length(dns))
+				c.set('amneziawg', 'main', 'dns', dns);
+			c.set('amneziawg', 'main', 'client_allowed_ips', [ '0.0.0.0/0', '::/0' ]);
+			c.set('amneziawg', 'main', 'client_keepalive', '25');
+			c.set('amneziawg', 'main', 'filter', '0');
+			c.commit('amneziawg');
+
+			reload_firewall();
+			reload_network();
+			system([ '/sbin/ifup', iface ], 30000);
+			return { ok: true };
+		}
+	},
+
+	/* "Config" page: what ends up in client configs */
+	set_config: {
+		args: { host: 'vpn.example.com', port: 51820, dns: [], allowed_ips: [], mtu: 0, keepalive: 25, obf: {} },
+		call: function(req) {
+			let host = trim(replace(replace(req.args.host ?? '', '[', ''), ']', ''));
+			let port = req.args.port;
+			let dns = as_list(req.args.dns);
+			let allowed = as_list(req.args.allowed_ips);
+			let mtu = req.args.mtu;
+			let ka = req.args.keepalive;
+			let obf = req.args.obf ?? {};
+
+			if (!match(host, HOST_RE))
+				return { error: 'Invalid host' };
+			if (!valid_int(port, 1, 65535))
+				return { error: 'Invalid port' };
+			if (!valid_iplist(dns))
+				return { error: 'Invalid DNS server' };
+			if (!length(allowed) || !valid_iplist(allowed))
+				return { error: 'Invalid Allowed IPs' };
+			if (mtu != null && mtu != 0 && !valid_int(mtu, 576, 1500))
+				return { error: 'MTU must be 576-1500' };
+			if (!valid_int(ka, 0, 65535))
+				return { error: 'Persistent keepalive must be 0-65535' };
+
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('network');
+			let srv = server_of(c);
+			if (!srv)
+				return { error: 'Not configured' };
+
+			let o = {};
+			for (let k in CLIENT_OBF_KEYS)
+				o[k] = trim('' + (obf[k] ?? ''));
+			/* only the client-side keys are checked here; ranges/sizes are the server's business */
+			let err = check_obf(o, mtu || +(c.get('network', srv.iface, 'mtu') ?? 1420));
+			if (err)
+				return { error: err };
+
+			let sid = srv['.name'];
+			c.set('amneziawg', sid, 'host', host);
+			c.set('amneziawg', sid, 'port', '' + port);
+			c.delete('amneziawg', sid, 'endpoint');
+			set_or_delete(c, 'amneziawg', sid, 'dns', dns);
+			c.set('amneziawg', sid, 'client_allowed_ips', allowed);
+			set_or_delete(c, 'amneziawg', sid, 'client_mtu', mtu ? '' + mtu : null);
+			c.set('amneziawg', sid, 'client_keepalive', '' + ka);
+			for (let k in CLIENT_OBF_KEYS)
+				set_or_delete(c, 'amneziawg', sid, 'client_awg_' + k, o[k]);
+			c.commit('amneziawg');
+
+			/* server side keepalive follows, live and persistent */
+			c.foreach('amneziawg', 'peer', p => {
+				let nsid = net_section_of(c, srv.iface, p.public_key);
+				if (nsid)
+					set_or_delete(c, 'network', nsid, 'persistent_keepalive', ka ? '' + ka : null);
+				if (p.enabled != '0')
+					run([ 'awg', 'set', srv.iface, 'peer', p.public_key, 'persistent-keepalive', '' + ka ]);
+			});
+			c.commit('network');
+
+			if (srv.filter == '1') {
+				c.load('firewall');
+				sync_firewall(c);
+			}
+			return { ok: true };
+		}
+	},
+
+	/* "Interface" page: kernel side of the server */
+	set_interface: {
+		args: { port: 51820, mtu: 1420, obf: {}, zones: [ 'wan' ], filter: false },
+		call: function(req) {
+			let port = req.args.port;
+			let mtu = req.args.mtu;
+			let obf = req.args.obf ?? {};
+			let zones = as_list(req.args.zones);
+			let filter_on = req.args.filter == true;
+
+			if (!valid_int(port, 1, 65535))
+				return { error: 'Invalid port' };
+			if (!valid_int(mtu, 576, 1500))
+				return { error: 'MTU must be 576-1500' };
+
+			let o = {};
+			for (let k in OBF_KEYS)
+				o[k] = trim('' + (obf[k] ?? ''));
+			let err = check_obf(o, mtu);
+			if (err)
+				return { error: err };
+			for (let z in zones)
+				if (!match(z, ZONE_RE))
+					return { error: 'Invalid zone name' };
+
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('network');
+			c.load('firewall');
+			let srv = server_of(c);
+			if (!srv)
+				return { error: 'Not configured' };
+
+			let known = {};
+			c.foreach('firewall', 'zone', z => { known[z.name] = true; });
+			for (let z in zones)
+				if (!known[z] || z == 'awg')
+					return { error: 'Unknown firewall zone: ' + z };
+
+			let iface = srv.iface;
+			let old_port = +c.get('network', iface, 'listen_port');
+			let old_obf = interface_obf(c, iface);
+
+			c.set('network', iface, 'listen_port', '' + port);
+			c.set('network', iface, 'mtu', '' + mtu);
+			for (let k in OBF_KEYS)
+				set_or_delete(c, 'network', iface, 'awg_' + k, o[k]);
+			c.commit('network');
+
+			/* listen port in the firewall, forwarding targets */
+			c.set('firewall', 'awg_in', 'dest_port', '' + port);
+			let old_fwd = [];
+			c.foreach('firewall', 'forwarding', f => {
+				if (f.src == 'awg')
+					push(old_fwd, f['.name']);
+			});
+			for (let n in old_fwd)
+				c.delete('firewall', n);
+			for (let z in zones) {
+				let n = 'awg_fwd_' + replace(z, '-', '_');
+				c.set('firewall', n, 'forwarding');
+				c.set('firewall', n, 'src', 'awg');
+				c.set('firewall', n, 'dest', z);
+			}
+			c.commit('firewall');
+
+			c.set('amneziawg', srv['.name'], 'filter', filter_on ? '1' : '0');
+			c.commit('amneziawg');
+			sync_firewall(c);
+
+			reload_network();
+
+			let changed = port != old_port;
+			for (let k in [ 's1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4' ])
+				if (('' + old_obf[k]) != o[k])
+					changed = true;
+			return { ok: true, clients_need_update: changed };
+		}
+	},
+
+	restart_interface: {
+		args: {},
+		call: function() {
+			let c = ctx();
+			c.load('amneziawg');
+			let srv = server_of(c);
+			if (!srv)
+				return { error: 'Not configured' };
+			run([ '/sbin/ifdown', srv.iface ]);
+			run([ '/sbin/ifup', srv.iface ]);
+			return { ok: true };
+		}
+	},
+
+	/* renumbers the server and all peers into a new subnet (server = first host, peers keep their order) */
+	change_cidr: {
+		args: { cidr: '10.9.0.1/24' },
+		call: function(req) {
+			let net = parse_cidr(req.args.cidr);
+			if (!net)
+				return { error: 'Invalid CIDR (IPv4, mask 16-30)' };
+
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('network');
+			c.load('firewall');
+			c.load('pbr');
+			let srv = server_of(c);
+			if (!srv)
+				return { error: 'Not configured' };
+
+			let peers = sort(peers_of(c), (a, b) => (ip4_to_int(a.address) ?? 0) - (ip4_to_int(b.address) ?? 0));
+			if (length(peers) > net.size - 3)
+				return { error: 'The subnet is too small for ' + length(peers) + ' peers' };
+
+			/* do not collide with other local networks */
+			let clash = null;
+			let new_first = net.base, new_last = net.base + net.size - 1;
+			c.foreach('network', 'interface', s => {
+				if (s['.name'] == srv.iface)
+					return;
+				let addrs = as_list(s.ipaddr);
+				for (let a in as_list(s.addresses))
+					push(addrs, a);
+				for (let a in addrs) {
+					let m = match(a, /^([0-9.]+)(\/([0-9]{1,2}))?$/);
+					let ip = m ? ip4_to_int(m[1]) : null;
+					if (ip == null)
+						continue;
+					let size = m[3] != null ? (1 << (32 - +m[3])) : 1;
+					let base = ip - (ip % size);
+					if (base <= new_last && new_first <= base + size - 1)
+						clash = s['.name'];
+				}
+			});
+			if (clash)
+				return { error: 'The subnet overlaps with the interface ' + clash };
+
+			c.set('network', srv.iface, 'addresses', [ int2ip(net.base + 1) + '/' + net.mask ]);
+
+			let i = 1, policies = false;
+			for (let p in peers) {
+				i++;
+				let addr = int2ip(net.base + i);
+				let nsid = net_section_of(c, srv.iface, p.public_key);
+				if (nsid)
+					c.set('network', nsid, 'allowed_ips', [ addr + '/32' ]);
+				c.set('amneziawg', p['.name'], 'address', addr);
+				let pol = policy_of(c, p.name);
+				if (pol) {
+					c.set('pbr', pol, 'src_addr', addr);
+					policies = true;
+				}
+			}
+			c.commit('network');
+			c.commit('amneziawg');
+			if (policies)
+				c.commit('pbr');
+
+			sync_firewall(c);
+			/* "addresses" and the peer sections are not netifd-tracked protocol options,
+			 * a plain "network reload" would not notice them: restart the interface */
+			run([ '/sbin/ifdown', srv.iface ]);
+			run([ '/sbin/ifup', srv.iface ]);
+			if (policies)
+				reload_pbr();
+			return { ok: true, clients_need_update: true };
+		}
+	},
+
+	/* allowed destinations of a peer; effective only when the server has filtering switched on */
+	set_peer_filter: {
+		args: { name: 'laptop', dest: [] },
+		call: function(req) {
+			let name = req.args.name;
+			let dest = as_list(req.args.dest);
+			if (!valid_name(name))
+				return { error: 'Invalid name' };
+			if (!valid_iplist(dest))
+				return { error: 'Invalid address or network' };
+
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('firewall');
+			let p = find_peer(c, name);
+			if (!p)
+				return { error: 'Peer not found' };
+
+			set_or_delete(c, 'amneziawg', p['.name'], 'dest', dest);
+			c.commit('amneziawg');
+			sync_firewall(c);
+			return { ok: true };
+		}
+	},
+
+	add_peer: {
+		args: { name: 'laptop', via: '', address: '' },
+		call: function(req) {
+			let name = req.args.name;
+			let via = req.args.via;
+			if (!valid_name(name))
+				return { error: 'Name may contain only letters, digits, ".", "_" and "-" (max 64)' };
+			if (via != null && via != '' && !match(via, /^[A-Za-z0-9_]+$/))
+				return { error: 'Invalid interface' };
+
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('network');
+			let srv = server_of(c);
+			if (!srv)
+				return { error: 'Server is not configured' };
+			if (find_peer(c, name))
+				return { error: 'A peer with this name already exists' };
+
+			let addr = trim('' + (req.args.address ?? ''));
+			if (addr == '') {
+				addr = free_address(c, srv);
+				if (!addr)
+					return { error: 'No free addresses left in the server subnet' };
+			} else {
+				let err = check_address(c, srv, addr, null);
+				if (err)
+					return { error: err };
+				addr = int2ip(ip4_to_int(addr));
+			}
+
+			let priv = genkey(), psk = genpsk();
+			let pub = priv ? pubkey(priv) : null;
+			if (!priv || !psk || !pub)
+				return { error: 'Key generation failed' };
+
+			let ka = settings_of(c, srv).keepalive;
+			let sid = c.add('network', 'amneziawg_' + srv.iface);
+			c.set('network', sid, 'description', name);
+			c.set('network', sid, 'public_key', pub);
+			c.set('network', sid, 'preshared_key', psk);
+			c.set('network', sid, 'allowed_ips', [ addr + '/32' ]);
+			if (ka)
+				c.set('network', sid, 'persistent_keepalive', '' + ka);
+			c.commit('network');
+
+			let pid = c.add('amneziawg', 'peer');
+			c.set('amneziawg', pid, 'name', name);
+			c.set('amneziawg', pid, 'private_key', priv);
+			c.set('amneziawg', pid, 'public_key', pub);
+			c.set('amneziawg', pid, 'psk', psk);
+			c.set('amneziawg', pid, 'address', addr);
+			c.set('amneziawg', pid, 'via', via ?? '');
+			c.set('amneziawg', pid, 'enabled', '1');
+			c.commit('amneziawg');
+
+			awg_set_peer(srv.iface, pub, psk, addr, ka);
+
+			if (via) {
+				let r = apply_route(name, via);
+				if (r.error)
+					return r;
+			}
+			return { ok: true, name, address: addr };
+		}
+	},
+
+	/* moves a peer to another address of the server subnet; the client needs a new config */
+	set_peer_address: {
+		args: { name: 'laptop', address: '10.8.0.10' },
+		call: function(req) {
+			let name = req.args.name;
+			if (!valid_name(name))
+				return { error: 'Invalid name' };
+
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('network');
+			c.load('pbr');
+			let srv = server_of(c);
+			let p = find_peer(c, name);
+			if (!srv || !p)
+				return { error: 'Peer not found' };
+
+			let want = trim('' + (req.args.address ?? ''));
+			let err = check_address(c, srv, want, name);
+			if (err)
+				return { error: err };
+			let addr = int2ip(ip4_to_int(want));
+			if (addr == p.address)
+				return { ok: true, client_needs_update: false };
+
+			let nsid = net_section_of(c, srv.iface, p.public_key);
+			if (nsid) {
+				c.set('network', nsid, 'allowed_ips', [ addr + '/32' ]);
+				c.commit('network');
+			}
+			c.set('amneziawg', p['.name'], 'address', addr);
+			c.commit('amneziawg');
+
+			let pol = policy_of(c, name);
+			if (pol) {
+				c.set('pbr', pol, 'src_addr', addr);
+				c.commit('pbr');
+				reload_pbr();
+			}
+
+			if (p.enabled != '0')
+				awg_set_peer(srv.iface, p.public_key, p.psk, addr, settings_of(c, srv).keepalive);
+
+			if (srv.filter == '1') {
+				c.load('firewall');
+				sync_firewall(c);
+			}
+			return { ok: true, client_needs_update: true };
+		}
+	},
+
+	remove_peer: {
+		args: { name: 'laptop' },
+		call: function(req) {
+			let name = req.args.name;
+			if (!valid_name(name))
+				return { error: 'Invalid name' };
+
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('network');
+			c.load('pbr');
+			let srv = server_of(c);
+			let p = find_peer(c, name);
+			if (!srv || !p)
+				return { error: 'Peer not found' };
+
+			awg_remove_peer(srv.iface, p.public_key);
+			let sid = net_section_of(c, srv.iface, p.public_key);
+			if (sid) {
+				c.delete('network', sid);
+				c.commit('network');
+			}
+			c.delete('amneziawg', p['.name']);
+			c.commit('amneziawg');
+
+			let pol = policy_of(c, name);
+			if (pol) {
+				c.delete('pbr', pol);
+				c.commit('pbr');
+				reload_pbr();
+			}
+
+			if (srv.filter == '1') {
+				c.load('firewall');
+				sync_firewall(c);
+			}
+			return { ok: true };
+		}
+	},
+
+	set_enabled: {
+		args: { name: 'laptop', enabled: true },
+		call: function(req) {
+			let name = req.args.name, on = req.args.enabled == true;
+			if (!valid_name(name))
+				return { error: 'Invalid name' };
+
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('network');
+			let srv = server_of(c);
+			let p = find_peer(c, name);
+			if (!srv || !p)
+				return { error: 'Peer not found' };
+
+			let sid = net_section_of(c, srv.iface, p.public_key);
+			if (sid) {
+				if (on)
+					c.delete('network', sid, 'disabled');
+				else
+					c.set('network', sid, 'disabled', '1');
+				c.commit('network');
+			}
+			c.set('amneziawg', p['.name'], 'enabled', on ? '1' : '0');
+			c.commit('amneziawg');
+
+			if (on)
+				awg_set_peer(srv.iface, p.public_key, p.psk, p.address, settings_of(c, srv).keepalive);
+			else
+				awg_remove_peer(srv.iface, p.public_key);
+
+			if (srv.filter == '1') {
+				c.load('firewall');
+				sync_firewall(c);
+			}
+			return { ok: true };
+		}
+	},
+
+	get_config: {
+		args: { name: 'laptop' },
+		call: function(req) {
+			let name = req.args.name;
+			if (!valid_name(name))
+				return { error: 'Invalid name' };
+
+			let c = ctx();
+			c.load('amneziawg');
+			c.load('network');
+			let srv = server_of(c);
+			let p = find_peer(c, name);
+			if (!srv || !p)
+				return { error: 'Peer not found' };
+			return { config: client_config(c, srv, p) };
+		}
+	},
+
+	set_route: {
+		args: { name: 'laptop', via: 'wan' },
+		call: function(req) {
+			return apply_route(req.args.name, req.args.via);
+		}
+	}
+};
+
+return { 'luci.amneziawg-peers': methods };

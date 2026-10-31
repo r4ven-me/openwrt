@@ -1,0 +1,585 @@
+'use strict';
+
+/*
+ * rpcd ucode plugin: client certificate management for luci-app-ocserv.
+ * Issues client certificates from the ocserv CA (/etc/ocserv/ca.pem),
+ * bundles them into PKCS#12 and maintains a CRL.
+ *
+ * Licensed to the public under the Apache License 2.0.
+ */
+
+import * as fs from 'fs';
+import { cursor } from 'uci';
+
+const OCDIR = '/etc/ocserv';
+const PKI = OCDIR + '/pki';
+const CLIENTS = OCDIR + '/clients';
+const CA_CERT = OCDIR + '/ca.pem';
+const CA_KEY = OCDIR + '/ca-key.pem';
+const CRL = OCDIR + '/crl.pem';
+const CNF = PKI + '/openssl.cnf';
+const PER_USER = OCDIR + '/config-per-user';
+const ZONE = 'ocserv';
+const POLICY_PREFIX = 'ocserv_';
+const LOCAL = OCDIR + '/ocserv.conf.local';
+const TEMPLATE = OCDIR + '/ocserv.conf.template';
+const MARK_BEGIN = '# BEGIN luci-app-ocserv';
+const MARK_END = '# END luci-app-ocserv';
+
+const OPENSSL_CNF = join('\n', [
+	'[ ca ]',
+	'default_ca = CA_default',
+	'[ CA_default ]',
+	'database = ' + PKI + '/index.txt',
+	'new_certs_dir = ' + PKI + '/newcerts',
+	'serial = ' + PKI + '/serial',
+	'crlnumber = ' + PKI + '/crlnumber',
+	'certificate = ' + CA_CERT,
+	'private_key = ' + CA_KEY,
+	'default_md = sha256',
+	'default_crl_days = 3650',
+	'unique_subject = no',
+	'policy = policy_cn',
+	'[ policy_cn ]',
+	'commonName = supplied',
+	'[ req ]',
+	'distinguished_name = req_dn',
+	'prompt = no',
+	'[ req_dn ]',
+	'CN = client',
+	'[ client_ext ]',
+	'basicConstraints = CA:FALSE',
+	'keyUsage = digitalSignature, keyEncipherment',
+	'extendedKeyUsage = clientAuth',
+	'subjectKeyIdentifier = hash',
+	'authorityKeyIdentifier = keyid',
+	''
+]);
+
+function run(argv) {
+	return system(argv, 60000) == 0;
+}
+
+function ensure_pki() {
+	if (!fs.access(CA_CERT) || !fs.access(CA_KEY))
+		return 'CA certificate/key not found in ' + OCDIR + ' (start ocserv once to create them)';
+
+	for (let d in [ PKI, PKI + '/newcerts', CLIENTS ])
+		if (!fs.stat(d))
+			fs.mkdir(d, 0700);
+
+	if (!fs.access(CNF))
+		fs.writefile(CNF, OPENSSL_CNF);
+	if (!fs.access(PKI + '/index.txt'))
+		fs.writefile(PKI + '/index.txt', '');
+	if (!fs.access(PKI + '/index.txt.attr'))
+		fs.writefile(PKI + '/index.txt.attr', 'unique_subject = no\n');
+	if (!fs.access(PKI + '/serial'))
+		fs.writefile(PKI + '/serial', '01\n');
+	if (!fs.access(PKI + '/crlnumber'))
+		fs.writefile(PKI + '/crlnumber', '01\n');
+
+	return null;
+}
+
+function gen_crl() {
+	return run([ 'openssl', 'ca', '-batch', '-config', CNF, '-gencrl', '-out', CRL ]);
+}
+
+function fmt_date(s) {
+	/* openssl index date: YYMMDDHHMMSSZ[,reason] */
+	let m = match(s, /^([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})/);
+	return m ? sprintf('20%s-%s-%s %s:%s', m[1], m[2], m[3], m[4], m[5]) : s;
+}
+
+function reload_pbr() {
+	if (fs.access('/etc/init.d/pbr'))
+		system([ '/etc/init.d/pbr', 'reload' ], 30000);
+}
+
+function reload_firewall() {
+	system([ '/etc/init.d/firewall', 'reload' ], 30000);
+}
+
+function ip4_to_int(s) {
+	let m = match(s ?? '', /^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/);
+	if (!m)
+		return null;
+	let o = [ +m[1], +m[2], +m[3], +m[4] ];
+	for (let x in o)
+		if (x > 255)
+			return null;
+	return o[0] * 16777216 + o[1] * 65536 + o[2] * 256 + o[3];
+}
+
+function int2ip(n) {
+	return sprintf('%d.%d.%d.%d', (n >> 24) & 255, (n >> 16) & 255, (n >> 8) & 255, n & 255);
+}
+
+/* the client address pool (ocserv.config ipaddr/netmask) as { first, last } host integers, or null */
+function pool_range() {
+	let c = cursor();
+	let ip = ip4_to_int(c.get('ocserv', 'config', 'ipaddr'));
+	let mask = ip4_to_int(c.get('ocserv', 'config', 'netmask'));
+	if (ip == null || mask == null)
+		return null;
+	let net = ip & mask, bcast = net | (~mask & 0xffffffff);
+	/* ipaddr itself is the server's tunnel address */
+	return { net, bcast, server: ip };
+}
+
+/* explicit-ipv4 of every config-per-user file: { cn: ip } */
+function user_ips() {
+	let res = {};
+	for (let f in fs.lsdir(PER_USER) ?? []) {
+		let data = fs.readfile(PER_USER + '/' + f) ?? '';
+		let m = match(data, /(^|\n)[ \t]*explicit-ipv4[ \t]*=[ \t]*"?([0-9.]+)"?/);
+		if (m)
+			res[f] = m[2];
+	}
+	return res;
+}
+
+/* sets (or, with value == null, removes) one directive in config-per-user/<cn>, keeping the rest */
+function set_directive(cn, key, value) {
+	let file = PER_USER + '/' + cn;
+	let lines = [];
+	for (let l in split(fs.readfile(file) ?? '', '\n'))
+		if (!match(l, regexp('^[ \t]*' + key + '[ \t]*=')))
+			push(lines, l);
+	while (length(lines) && lines[length(lines) - 1] == '')
+		pop(lines);
+	if (value != null)
+		push(lines, key + ' = ' + value);
+
+	if (!length(lines)) {
+		fs.unlink(file);
+		return;
+	}
+	if (!fs.stat(PER_USER))
+		fs.mkdir(PER_USER, 0755);
+	fs.writefile(file, join('\n', lines) + '\n');
+}
+
+/* ip == '' picks the first free pool address; returns { ip } or { error } */
+function pick_ip(cn, ip) {
+	let pool = pool_range();
+	if (!pool)
+		return { error: 'The client address pool is not configured (Server page)' };
+
+	let used = {}, ips = user_ips();
+	for (let u in keys(ips)) {
+		if (u == cn)
+			continue;
+		let n = ip4_to_int(ips[u]);
+		if (n != null)
+			used[n] = true;
+	}
+
+	if (ip) {
+		let n = ip4_to_int(ip);
+		if (n == null || n <= pool.net || n >= pool.bcast || (n & ~(pool.net ^ pool.bcast) & 0xffffffff) != pool.net)
+			return { error: 'The address is outside the client pool' };
+		if (n == pool.server)
+			return { error: 'This is the server address' };
+		if (used[n])
+			return { error: 'The address is already used by another user' };
+		return { ip: int2ip(n) };
+	}
+
+	for (let n = pool.net + 1; n < pool.bcast; n++)
+		if (n != pool.server && !used[n])
+			return { ip: int2ip(n) };
+	return { error: 'No free addresses left in the client pool' };
+}
+
+function as_list(v) {
+	if (v == null)
+		return [];
+	if (type(v) == 'array')
+		return filter(map(v, x => trim('' + x)), x => x != '');
+	return filter(split(trim('' + v), /[ ,]+/), x => x != '');
+}
+
+function policy_of(c, cn) {
+	let found = null;
+	c.foreach('pbr', 'policy', s => {
+		if (s.name == POLICY_PREFIX + cn)
+			found = s['.name'];
+	});
+	return found;
+}
+
+/* exit interface of a user (from its pbr policy), '' for the default route */
+function via_of(c, cn) {
+	let pol = policy_of(c, cn);
+	return pol ? (c.get('pbr', pol, 'interface') ?? '') : '';
+}
+
+/*
+ * The tunnel devices (vpns+) must sit in a firewall zone, forwarded to wan and to the zone of every
+ * exit interface in use. Creates the missing zone/forwardings (exit zones masquerade like in
+ * luci-app-amneziawg) and reloads the firewall if anything changed. c must have 'firewall' loaded.
+ */
+function ensure_zone(c, via) {
+	let changed = false, warning = null;
+
+	let have = false;
+	c.foreach('firewall', 'zone', z => {
+		if (z.name == ZONE)
+			have = true;
+	});
+	if (!have) {
+		c.set('firewall', 'ocserv_zone', 'zone');
+		c.set('firewall', 'ocserv_zone', 'name', ZONE);
+		c.set('firewall', 'ocserv_zone', 'device', [ 'vpns+' ]);
+		c.set('firewall', 'ocserv_zone', 'input', 'ACCEPT');
+		c.set('firewall', 'ocserv_zone', 'output', 'ACCEPT');
+		c.set('firewall', 'ocserv_zone', 'forward', 'ACCEPT');
+		changed = true;
+	}
+
+	let dests = [ 'wan' ];
+	if (via) {
+		let zone = null, zsid = null;
+		c.foreach('firewall', 'zone', z => {
+			if (z.name != ZONE && (via in as_list(z.network))) {
+				zone = z.name;
+				zsid = z['.name'];
+			}
+		});
+		if (!zone) {
+			/* fw4 zone names are limited to 11 characters */
+			zone = substr('vpn_' + via, 0, 11);
+			zsid = 'ocserv_exit_' + via;
+			c.set('firewall', zsid, 'zone');
+			c.set('firewall', zsid, 'name', zone);
+			c.set('firewall', zsid, 'network', [ via ]);
+			c.set('firewall', zsid, 'input', 'REJECT');
+			c.set('firewall', zsid, 'output', 'ACCEPT');
+			c.set('firewall', zsid, 'forward', 'REJECT');
+			c.set('firewall', zsid, 'masq', '1');
+			c.set('firewall', zsid, 'mtu_fix', '1');
+			changed = true;
+		}
+		else if (c.get('firewall', zsid, 'masq') != '1') {
+			warning = 'The firewall zone "' + zone + '" of ' + via + ' has no masquerading: replies from upstream may not come back';
+		}
+		push(dests, zone);
+	}
+
+	for (let dest in dests) {
+		let fwd = false;
+		c.foreach('firewall', 'forwarding', f => {
+			if (f.src == ZONE && f.dest == dest)
+				fwd = true;
+		});
+		if (!fwd) {
+			let n = 'ocserv_fwd_' + replace(dest, '-', '_');
+			c.set('firewall', n, 'forwarding');
+			c.set('firewall', n, 'src', ZONE);
+			c.set('firewall', n, 'dest', dest);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		c.commit('firewall');
+		reload_firewall();
+	}
+	return { warning };
+}
+
+/* via = '' removes the policy (the user goes out through the default route) */
+function apply_route(cn, ip, via) {
+	if (via && !match(via, /^[A-Za-z0-9_]+$/))
+		return { error: 'Invalid interface' };
+	if (via && !fs.access('/etc/init.d/pbr'))
+		return { error: 'The pbr package is not installed' };
+
+	let c = cursor();
+	c.load('pbr');
+	c.load('firewall');
+
+	let exit = ensure_zone(c, via);
+
+	let pol = policy_of(c, cn);
+	if (!via) {
+		if (pol)
+			c.delete('pbr', pol);
+	} else {
+		if (!pol)
+			pol = c.add('pbr', 'policy');
+		c.set('pbr', pol, 'name', POLICY_PREFIX + cn);
+		c.set('pbr', pol, 'src_addr', ip);
+		c.set('pbr', pol, 'interface', via);
+		c.set('pbr', pol, 'enabled', '1');
+		/* pbr ships disabled; policies do nothing until it is switched on */
+		if (c.get('pbr', 'config', 'enabled') != '1')
+			c.set('pbr', 'config', 'enabled', '1');
+	}
+	c.commit('pbr');
+	reload_pbr();
+	return exit.warning ? { ok: true, warning: exit.warning } : { ok: true };
+}
+
+function read_index() {
+	let res = [];
+	let data = fs.readfile(PKI + '/index.txt');
+	if (!data)
+		return res;
+
+	let c = cursor();
+	c.load('pbr');
+	let ips = user_ips();
+	for (let line in split(data, '\n')) {
+		let f = split(line, '\t');
+		if (length(f) < 6)
+			continue;
+		let cn = match(f[5], /\/CN=([^\/]+)/);
+		let status = (f[0] == 'R') ? 'revoked' : 'valid';
+		push(res, {
+			cn: cn ? cn[1] : f[5],
+			serial: f[3],
+			status,
+			expires: fmt_date(f[1]),
+			revoked: f[2] ? fmt_date(f[2]) : null,
+			has_p12: (cn && fs.access(CLIENTS + '/' + cn[1] + '.p12')) ? true : false,
+			has_key: (cn && fs.access(CLIENTS + '/' + cn[1] + '.key')) ? true : false,
+			has_crt: (cn && fs.access(PKI + '/newcerts/' + f[3] + '.pem')) ? true : false,
+			ip: cn ? (ips[cn[1]] ?? '') : '',
+			via: (cn && status == 'valid') ? via_of(c, cn[1]) : ''
+		});
+	}
+	return res;
+}
+
+function valid_cn(cn) {
+	return type(cn) == 'string' && length(cn) <= 64 && match(cn, /^[A-Za-z0-9._-]+$/) != null;
+}
+
+const methods = {
+	list: {
+		args: {},
+		call: function() {
+			/* interfaces a user can be sent out through (the default route if none is chosen) */
+			let c = cursor(), ifaces = [];
+			c.foreach('network', 'interface', s => {
+				if (s['.name'] != 'loopback' && s.proto != 'amneziawg')
+					push(ifaces, s['.name']);
+			});
+			return {
+				certs: read_index(),
+				ca: fs.access(CA_CERT) ? true : false,
+				ifaces,
+				pbr: fs.access('/etc/init.d/pbr') ? true : false
+			};
+		}
+	},
+
+	issue: {
+		args: { cn: 'cn', days: 365, password: 'password', ip: '', via: '' },
+		call: function(req) {
+			let cn = req.args.cn, days = +req.args.days, pw = req.args.password;
+			let via = req.args.via ?? '';
+
+			if (!valid_cn(cn))
+				return { error: 'Invalid name: use letters, digits, ".", "_" and "-" (max 64)' };
+			if (!(days >= 1 && days <= 36500))
+				return { error: 'Invalid validity period' };
+			if (type(pw) != 'string' || length(pw) < 1)
+				return { error: 'PKCS#12 password must not be empty' };
+
+			if (via && !match(via, /^[A-Za-z0-9_]+$/))
+				return { error: 'Invalid interface' };
+
+			let err = ensure_pki();
+			if (err)
+				return { error: err };
+
+			for (let c in read_index())
+				if (c.cn == cn && c.status == 'valid')
+					return { error: 'A valid certificate for this name already exists; revoke it first' };
+
+			let addr = pick_ip(cn, req.args.ip);
+			if (addr.error)
+				return addr;
+
+			let tmp = fs.mkdtemp('/tmp/ocserv-pki.XXXXXX');
+			if (!tmp)
+				return { error: 'Cannot create temporary directory' };
+
+			let key = tmp + '/key.pem', csr = tmp + '/req.pem', crt = tmp + '/crt.pem', pwf = tmp + '/pw';
+			let p12 = CLIENTS + '/' + cn + '.p12';
+			let step = null;
+
+			fs.writefile(pwf, pw);
+
+			if (!run([ 'openssl', 'genrsa', '-out', key, '2048' ]))
+				step = 'key generation';
+			else if (!run([ 'openssl', 'req', '-new', '-config', CNF, '-key', key, '-subj', '/CN=' + cn, '-out', csr ]))
+				step = 'request creation';
+			else if (!run([ 'openssl', 'ca', '-batch', '-config', CNF, '-in', csr, '-out', crt, '-days', '' + days,
+			                '-notext', '-extensions', 'client_ext', '-subj', '/CN=' + cn ]))
+				step = 'signing';
+			else if (!run([ 'openssl', 'pkcs12', '-export', '-inkey', key, '-in', crt, '-certfile', CA_CERT,
+			                '-name', cn, '-out', p12, '-passout', 'file:' + pwf ]))
+				step = 'PKCS#12 export';
+			else {
+				fs.chmod(p12, 0600);
+				/* keep the key and certificate too, so they can be downloaded separately */
+				fs.writefile(CLIENTS + '/' + cn + '.key', fs.readfile(key));
+				fs.chmod(CLIENTS + '/' + cn + '.key', 0600);
+				fs.writefile(CLIENTS + '/' + cn + '.crt', fs.readfile(crt));
+				fs.chmod(CLIENTS + '/' + cn + '.crt', 0644);
+			}
+
+			system([ 'rm', '-rf', tmp ]);
+
+			if (step)
+				return { error: 'Failed at ' + step };
+
+			gen_crl();
+
+			set_directive(cn, 'explicit-ipv4', addr.ip);
+			let route = apply_route(cn, addr.ip, via);
+			if (route.error)
+				return { ok: true, cn, ip: addr.ip, warning: route.error };
+			return { ok: true, cn, ip: addr.ip, warning: route.warning };
+		}
+	},
+
+	revoke: {
+		args: { serial: 'serial' },
+		call: function(req) {
+			let serial = req.args.serial;
+			if (type(serial) != 'string' || !match(serial, /^[0-9A-Fa-f]+$/))
+				return { error: 'Invalid serial' };
+
+			let err = ensure_pki();
+			if (err)
+				return { error: err };
+
+			let entry = null;
+			for (let c in read_index())
+				if (uc(c.serial) == uc(serial))
+					entry = c;
+			if (!entry || entry.status != 'valid')
+				return { error: 'Certificate not found or already revoked' };
+
+			if (!run([ 'openssl', 'ca', '-batch', '-config', CNF, '-revoke', PKI + '/newcerts/' + entry.serial + '.pem' ]))
+				return { error: 'Revocation failed' };
+			if (!gen_crl())
+				return { error: 'CRL generation failed' };
+
+			for (let ext in [ 'p12', 'key', 'crt' ])
+				fs.unlink(CLIENTS + '/' + entry.cn + '.' + ext);
+			set_directive(entry.cn, 'explicit-ipv4', null);
+			apply_route(entry.cn, '', '');
+			system([ '/usr/bin/occtl', 'reload' ], 10000);
+			return { ok: true };
+		}
+	},
+
+	/* changes the fixed address and/or the exit interface of an issued user */
+	set_user: {
+		args: { cn: 'cn', ip: '', via: '' },
+		call: function(req) {
+			let cn = req.args.cn, via = req.args.via ?? '';
+			if (!valid_cn(cn))
+				return { error: 'Invalid name' };
+
+			let found = false;
+			for (let e in read_index())
+				if (e.cn == cn && e.status == 'valid')
+					found = true;
+			if (!found)
+				return { error: 'No valid certificate for this name' };
+
+			let addr = pick_ip(cn, req.args.ip);
+			if (addr.error)
+				return addr;
+
+			set_directive(cn, 'explicit-ipv4', addr.ip);
+			return apply_route(cn, addr.ip, via);
+		}
+	},
+
+	/* kind: crt | key | p12; returns the file base64-encoded (the p12 is binary) */
+	get_file: {
+		args: { cn: 'cn', kind: 'crt' },
+		call: function(req) {
+			let cn = req.args.cn, kind = req.args.kind;
+			if (!valid_cn(cn))
+				return { error: 'Invalid name' };
+			if (!(kind in [ 'crt', 'key', 'p12' ]))
+				return { error: 'Invalid file type' };
+
+			let path = CLIENTS + '/' + cn + '.' + kind;
+			if (kind == 'crt' && !fs.access(path)) {
+				/* certificates issued before the crt was kept: take it from the CA database */
+				for (let e in read_index())
+					if (e.cn == cn && e.status == 'valid')
+						path = PKI + '/newcerts/' + e.serial + '.pem';
+			}
+
+			let data = fs.readfile(path);
+			if (data == null)
+				return { error: 'File not found' };
+			return { name: cn + '.' + (kind == 'key' ? 'key' : kind == 'crt' ? 'crt' : 'p12'), data: b64enc(data) };
+		}
+	},
+
+	/* Rewrites the auth-related block of ocserv.conf.local from UCI settings */
+	apply_auth: {
+		args: { auth: 'plain', plain_fallback: false },
+		call: function(req) {
+			let auth = req.args.auth, also_plain = req.args.plain_fallback == true;
+			if (!(auth in [ 'plain', 'PAM', 'certificate' ]))
+				return { error: 'Invalid auth method' };
+
+			let old = fs.readfile(LOCAL) ?? '';
+			let out = [], skip = false;
+			for (let line in split(old, '\n')) {
+				if (line == MARK_BEGIN) { skip = true; continue; }
+				if (line == MARK_END) { skip = false; continue; }
+				if (!skip)
+					push(out, line);
+			}
+			while (length(out) && out[length(out) - 1] == '')
+				pop(out);
+
+			if (auth == 'certificate') {
+				let err = ensure_pki();
+				if (err)
+					return { error: err };
+				if (!fs.access(CRL))
+					gen_crl();
+
+				/* directives already set in the template (edited in LuCI) win */
+				let tpl = fs.readfile(TEMPLATE) ?? '';
+				let wanted = {
+					'ca-cert': CA_CERT,
+					'cert-user-oid': '2.5.4.3',
+					'crl': fs.access(CRL) ? CRL : null
+				};
+
+				push(out, '', MARK_BEGIN);
+				for (let key in keys(wanted))
+					if (wanted[key] != null && !match(tpl, regexp('^' + key + '[ \t]*=', 's')))
+						push(out, key + ' = ' + wanted[key]);
+				if (also_plain)
+					push(out, 'enable-auth = "plain[passwd=/var/etc/ocpasswd]"');
+				push(out, MARK_END);
+			}
+
+			if (!length(out) && !fs.access(LOCAL))
+				return { ok: true };
+
+			fs.writefile(LOCAL, join('\n', out) + (length(out) ? '\n' : ''));
+			return { ok: true };
+		}
+	}
+};
+
+return { 'luci.ocserv-pki': methods };
