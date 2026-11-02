@@ -49,6 +49,7 @@ return baseclass.extend({
 			id: entry.ID,
 			user: entry?.Username || entry?.User,
 			group: entry?.Groupname || entry?.Group,
+			vhost: entry?.VHost ?? entry?.Vhost ?? entry?.vhost,
 			vpn_ip: entry['vpn-ipv4'] || entry.vpn_ip || entry?.IPv4,
 			vpn_ip6: entry['vpn-ipv6'] || entry.vpn_ip6 || entry?.IPv6,
 			ip: entry?.['Remote IP'],
@@ -83,11 +84,13 @@ return baseclass.extend({
 
 	render: function(data) {
 		const users = this.parseUsers(data || '');
+		const hasVhosts = users.some(user => user.vhost != null);
 
 		const table = E('div', { 'class': 'table' }, [
 			E('div', { 'class': 'tr table-titles' }, [
 				E('div', { 'class': 'th' }, _('User')),
 				E('div', { 'class': 'th' }, _('Group')),
+				...(hasVhosts ? [ E('div', { 'class': 'th' }, _('VHost')) ] : []),
 				E('div', { 'class': 'th' }, _('VPN IP Address')),
 				E('div', { 'class': 'th' }, _('IP Address')),
 				E('div', { 'class': 'th' }, _('Device')),
@@ -113,6 +116,7 @@ return baseclass.extend({
 					E('div', { 'class': 'tr' }, [
 						E('div', { 'class': 'td' }, user.user),
 						E('div', { 'class': 'td' }, user.group),
+						...(hasVhosts ? [ E('div', { 'class': 'td' }, user.vhost) ] : []),
 						E('div', { 'class': 'td' }, user.vpn_ip),
 						E('div', { 'class': 'td' }, user.ip),
 						E('div', { 'class': 'td' }, user.device),

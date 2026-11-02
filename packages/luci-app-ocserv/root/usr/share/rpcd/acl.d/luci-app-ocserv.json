@@ -6,6 +6,13 @@
 				"/etc/ocserv/*": [
 					"read"
 				],
+				"/etc/ocserv/vhosts": [
+					"list"
+				],
+				"/etc/ocserv/vhosts/*": [
+					"read",
+					"list"
+				],
 				"/proc/net/ipv6_route": [
 					"read"
 				],
@@ -44,6 +51,9 @@
 				],
 				"/bin/mkdir -p /etc/ocserv/config-per-group": [
 					"exec"
+				],
+				"/bin/mkdir -p /etc/ocserv/vhosts/*": [
+					"exec"
 				]
 			},
 			"ubus": {
@@ -66,6 +76,10 @@
 				"/etc/ocserv/ocserv.conf.template": [
 					"write"
 				],
+				"/etc/ocserv/vhosts/*": [
+					"write",
+					"list"
+				],
 				"/etc/ocserv/config-per-user/*": [
 					"write"
 				],
@@ -85,6 +99,8 @@
 					"revoke",
 					"set_user",
 					"get_file",
+					"create_vhost",
+					"delete_vhost",
 					"apply_auth"
 				]
 			},

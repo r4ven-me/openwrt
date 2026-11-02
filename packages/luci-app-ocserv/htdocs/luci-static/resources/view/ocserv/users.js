@@ -55,6 +55,7 @@ return L.view.extend({
 			id: entry.ID,
 			user: entry?.Username || entry?.User,
 			group: entry?.Groupname || entry?.Group,
+			vhost: entry?.VHost ?? entry?.Vhost ?? entry?.vhost,
 			vpn_ip: entry['vpn-ipv4'] || entry.vpn_ip || entry?.IPv4,
 			vpn_ip6: entry['vpn-ipv6'] || entry.vpn_ip6 || entry?.IPv6,
 			ip: entry?.['Remote IP'],
@@ -82,6 +83,7 @@ return L.view.extend({
 
 	render([occtl_output]) {
 		const users = this.parseUsers(occtl_output);
+		const hasVhosts = users.some(user => user.vhost != null);
 
 		const m = new form.Map('ocserv', _('OpenConnect VPN'));
 
@@ -97,6 +99,7 @@ return L.view.extend({
 					E('div', { 'class': 'th' }, _('ID')),
 					E('div', { 'class': 'th' }, _('Username')),
 					E('div', { 'class': 'th' }, _('Group')),
+					...(hasVhosts ? [ E('div', { 'class': 'th' }, _('VHost')) ] : []),
 					E('div', { 'class': 'th' }, _('VPN IPv4')),
 					E('div', { 'class': 'th' }, _('VPN IPv6')),
 					E('div', { 'class': 'th' }, _('Remote IP')),
@@ -124,6 +127,7 @@ return L.view.extend({
 							E('div', { 'class': 'td', 'data-title': _('ID') }, user.id),
 							E('div', { 'class': 'td', 'data-title': _('Username') }, user.user),
 							E('div', { 'class': 'td', 'data-title': _('Group') }, user.group),
+							...(hasVhosts ? [ E('div', { 'class': 'td', 'data-title': _('VHost') }, user.vhost) ] : []),
 							E('div', { 'class': 'td', 'data-title': _('VPN IPv4') }, user.vpn_ip),
 							E('div', { 'class': 'td', 'data-title': _('VPN IPv6') }, user.vpn_ip6),
 							E('div', { 'class': 'td', 'data-title': _('Remote IP') }, user.ip),

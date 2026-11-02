@@ -1,6 +1,7 @@
 'use strict';
 'require rpc';
 'require ui';
+'require uci';
 
 /* Client certificate management for OpenConnect VPN.
    Licensed to the public under the Apache License 2.0.
@@ -9,40 +10,83 @@
 const callList = rpc.declare({
 	object: 'luci.ocserv-pki',
 	method: 'list',
+	params: [ 'vhost' ],
 	expect: { '': {} }
 });
 
 const callIssue = rpc.declare({
 	object: 'luci.ocserv-pki',
 	method: 'issue',
-	params: [ 'cn', 'days', 'password', 'ip', 'via' ],
+	params: [ 'cn', 'days', 'password', 'ip', 'via', 'vhost' ],
 	expect: { '': {} }
 });
 
 const callSetUser = rpc.declare({
 	object: 'luci.ocserv-pki',
 	method: 'set_user',
-	params: [ 'cn', 'ip', 'via' ],
+	params: [ 'cn', 'ip', 'via', 'vhost' ],
 	expect: { '': {} }
 });
 
 const callGetFile = rpc.declare({
 	object: 'luci.ocserv-pki',
 	method: 'get_file',
-	params: [ 'cn', 'kind' ],
+	params: [ 'cn', 'kind', 'vhost' ],
 	expect: { '': {} }
 });
 
 const callRevoke = rpc.declare({
 	object: 'luci.ocserv-pki',
 	method: 'revoke',
-	params: [ 'serial' ],
+	params: [ 'serial', 'vhost' ],
 	expect: { '': {} }
 });
 
 return L.view.extend({
 	load() {
-		return L.resolveDefault(callList(), {});
+		return uci.load('ocserv').then(() => {
+			this.vhosts = uci.sections('ocserv', 'vhost');
+			const requested = new URLSearchParams(window.location.search).get('vhost') || '';
+			this.vhost = this.vhosts.some(s => s['.name'] == requested) ? requested : '';
+			return L.resolveDefault(callList(this.vhost), {});
+		});
+	},
+
+	vhostLabel(section) {
+		return section.domain || section.hostname || section.name || section['.name'];
+	},
+
+	handleVhostChange(ev) {
+		const url = new URL(window.location.href);
+		const vhost = ev.target.value;
+
+		if (vhost)
+			url.searchParams.set('vhost', vhost);
+		else
+			url.searchParams.delete('vhost');
+
+		window.location.assign(url.toString());
+	},
+
+	renderVhostSelector() {
+		const options = [ E('option', { 'value': '', 'selected': this.vhost ? null : '' }, _('Default')) ];
+
+		for (const section of this.vhosts || []) {
+			const id = section['.name'];
+			options.push(E('option', {
+				'value': id,
+				'selected': id == this.vhost ? '' : null
+			}, this.vhostLabel(section)));
+		}
+
+		return E('div', { 'class': 'cbi-value' }, [
+			E('label', { 'class': 'cbi-value-title' }, _('VHost')),
+			E('div', { 'class': 'cbi-value-field' },
+				E('select', {
+					'class': 'cbi-input-select',
+					'change': ui.createHandlerFn(this, 'handleVhostChange')
+				}, options))
+		]);
 	},
 
 	handleIssue() {
@@ -59,7 +103,7 @@ return L.view.extend({
 
 		ui.showModal(_('Generating certificate…'), [ E('p', { 'class': 'spinning' }, _('Please wait.')) ]);
 
-		return callIssue(cn, days, pw, this.ipInput.value.trim(), this.viaSelect.value).then(res => {
+		return callIssue(cn, days, pw, this.ipInput.value.trim(), this.viaSelect.value, this.vhost).then(res => {
 			ui.hideModal();
 			if (res.error)
 				ui.addNotification(null, E('p', res.error), 'error');
@@ -78,7 +122,7 @@ return L.view.extend({
 		if (!confirm(_('Revoke certificate "%s"?').format(cert.cn)))
 			return;
 
-		return callRevoke(cert.serial).then(res => {
+		return callRevoke(cert.serial, this.vhost).then(res => {
 			if (res.error)
 				ui.addNotification(null, E('p', res.error), 'error');
 			else
@@ -87,7 +131,7 @@ return L.view.extend({
 	},
 
 	handleDownload(cert, kind) {
-		return callGetFile(cert.cn, kind).then(res => {
+		return callGetFile(cert.cn, kind, this.vhost).then(res => {
 			if (res.error)
 				throw new Error(res.error);
 			const bin = atob(res.data);
@@ -106,7 +150,7 @@ return L.view.extend({
 	},
 
 	handleSetUser(cert, ipInput, viaSelect) {
-		return callSetUser(cert.cn, ipInput.value.trim(), viaSelect.value).then(res => {
+		return callSetUser(cert.cn, ipInput.value.trim(), viaSelect.value, this.vhost).then(res => {
 			if (res.error)
 				ui.addNotification(null, E('p', res.error), 'error');
 			else {
@@ -127,7 +171,7 @@ return L.view.extend({
 	},
 
 	reload() {
-		return callList().then(data => {
+		return callList(this.vhost).then(data => {
 			this.ifaces = data.ifaces || [];
 			this.pbr = data.pbr !== false;
 			this.fillTable(data);
@@ -199,6 +243,7 @@ return L.view.extend({
 			E('h2', _('OpenConnect VPN: client certificates')),
 			E('div', { 'class': 'cbi-map-descr' },
 				_('Certificates are signed by the server CA and exported as a password-protected PKCS#12 (.p12) file for import into the client. Enable "certificate" authentication on the Server Settings page to use them.')),
+			this.renderVhostSelector(),
 			data.pbr === false ? E('div', { 'class': 'alert-message warning' },
 				_('The pbr package is not installed: the exit interface cannot be chosen.')) : '',
 			data.ca === false ? E('div', { 'class': 'alert-message warning' },

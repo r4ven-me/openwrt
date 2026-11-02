@@ -13,40 +13,101 @@
 
 const KINDS = {
 	user: {
-		dir: '/etc/ocserv/config-per-user',
+		dir: 'config-per-user',
 		title: _('Per-user configuration'),
-		descr: _('Each file in /etc/ocserv/config-per-user is applied to the user whose name matches the file name.'),
 		nameTitle: _('User name')
 	},
 	group: {
-		dir: '/etc/ocserv/config-per-group',
+		dir: 'config-per-group',
 		title: _('Per-group configuration'),
-		descr: _('Each file in /etc/ocserv/config-per-group is applied to the group whose name matches the file name.'),
 		nameTitle: _('Group name')
 	}
 };
 
 return L.view.extend({
 	load() {
-		return Promise.all([
-			uci.load('ocserv'),
-			L.resolveDefault(fs.list(KINDS.user.dir), []),
-			L.resolveDefault(fs.list(KINDS.group.dir), [])
+		return uci.load('ocserv').then(() => {
+			this.vhosts = uci.sections('ocserv', 'vhost');
+			const requested = new URLSearchParams(window.location.search).get('vhost') || '';
+			this.vhost = this.vhosts.some(s => s['.name'] == requested) ? requested : '';
+
+			const root = this.vhost ? '/etc/ocserv/vhosts/' + this.vhost : '/etc/ocserv';
+			this.dirs = {
+				user: root + '/' + KINDS.user.dir,
+				group: root + '/' + KINDS.group.dir
+			};
+
+			return Promise.all([
+				L.resolveDefault(fs.list(this.dirs.user), []),
+				L.resolveDefault(fs.list(this.dirs.group), [])
+			]);
+		});
+	},
+
+	vhostLabel(section) {
+		return section.domain || section.hostname || section.name || section['.name'];
+	},
+
+	handleVhostChange(ev) {
+		const url = new URL(window.location.href);
+		const vhost = ev.target.value;
+
+		if (vhost)
+			url.searchParams.set('vhost', vhost);
+		else
+			url.searchParams.delete('vhost');
+
+		window.location.assign(url.toString());
+	},
+
+	renderVhostSelector() {
+		const options = [ E('option', { 'value': '', 'selected': this.vhost ? null : '' }, _('Default')) ];
+
+		for (const section of this.vhosts || []) {
+			const id = section['.name'];
+			options.push(E('option', {
+				'value': id,
+				'selected': id == this.vhost ? '' : null
+			}, this.vhostLabel(section)));
+		}
+
+		return E('div', { 'class': 'cbi-map' }, [
+			E('div', { 'class': 'cbi-value' }, [
+				E('label', { 'class': 'cbi-value-title' }, _('VHost')),
+				E('div', { 'class': 'cbi-value-field' },
+					E('select', {
+						'class': 'cbi-input-select',
+						'change': ui.createHandlerFn(this, 'handleVhostChange')
+					}, options))
+			])
 		]);
 	},
 
-	render([ , userFiles, groupFiles ]) {
+	selectedAuth() {
+		return (this.vhost && uci.get('ocserv', this.vhost, 'auth')) ||
+			uci.get('ocserv', 'config', 'auth') || 'plain';
+	},
+
+	render([ userFiles, groupFiles ]) {
 		this.files = { user: userFiles, group: groupFiles };
 		this.tables = {};
 
-		const nodes = [];
+		const nodes = [ this.renderVhostSelector() ];
+		const auth = this.selectedAuth();
 
-		if (uci.get('ocserv', 'config', 'auth') === 'plain') {
+		const plainFallback = this.vhost
+			? uci.get('ocserv', this.vhost, 'auth_plain_fallback') == '1'
+			: uci.get('ocserv', 'config', 'auth_plain_fallback') == '1';
+
+		if (auth === 'plain' || (auth === 'certificate' && plainFallback)) {
 			const m = new form.Map('ocserv', _('OpenConnect VPN'));
 			const s = m.section(form.TableSection, 'ocservusers', _('Accounts'),
 				_('Users that log in with a password (plain authentication). The group is matched with the per-group configuration below; "*" means any.'));
 			s.anonymous = true;
 			s.addremove = true;
+			s.cfgsections = () => uci.sections('ocserv', 'ocservusers')
+				.filter(section => (section.vhost || '') === this.vhost)
+				.map(section => section['.name']);
 
 			let o = s.option(form.Value, 'name', _('Name'));
 			o.rmempty = false;
@@ -59,13 +120,20 @@ return L.view.extend({
 			o.password = true;
 			o.rmempty = false;
 
+			o = s.option(form.ListValue, 'vhost', _('VHost'));
+			o.value('', _('Default'));
+			for (const section of this.vhosts || [])
+				o.value(section['.name'], this.vhostLabel(section));
+			o.default = this.vhost;
+			o.rmempty = true;
+
 			nodes.push(m.render());
 		}
 		else {
 			nodes.push(E('div', { 'class': 'cbi-map' }, [
 				E('h2', _('OpenConnect VPN')),
 				E('div', { 'class': 'cbi-map-descr' },
-					_('Accounts with passwords are only used with "plain" authentication; the current method is "%s".').format(uci.get('ocserv', 'config', 'auth') || 'plain'))
+					_('Accounts with passwords are only used with "plain" authentication; the current method is "%s".').format(auth))
 			]));
 		}
 
@@ -77,15 +145,19 @@ return L.view.extend({
 
 	renderFiles(kind) {
 		const k = KINDS[kind];
+		const dir = this.dirs[kind];
 		const table = E('table', { 'class': 'table' });
 		const input = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': k.nameTitle });
+		const descr = kind === 'user'
+			? _('Each file in %s is applied to the user whose name matches the file name.').format(dir)
+			: _('Each file in %s is applied to the group whose name matches the file name.').format(dir);
 
 		this.tables[kind] = table;
 		this.fillFiles(kind);
 
 		return E('div', { 'class': 'cbi-section' }, [
 			E('h3', k.title),
-			E('div', { 'class': 'cbi-section-descr' }, k.descr),
+			E('div', { 'class': 'cbi-section-descr' }, descr),
 			table,
 			E('div', { 'class': 'cbi-section-create' }, [
 				input, ' ',
@@ -128,7 +200,7 @@ return L.view.extend({
 	},
 
 	refreshFiles(kind) {
-		return L.resolveDefault(fs.list(KINDS[kind].dir), []).then(files => {
+		return L.resolveDefault(fs.list(this.dirs[kind]), []).then(files => {
 			this.files[kind] = files;
 			this.fillFiles(kind);
 		});
@@ -148,14 +220,15 @@ return L.view.extend({
 		if (!confirm(_('Delete the configuration file "%s"?').format(name)))
 			return;
 
-		return fs.remove(KINDS[kind].dir + '/' + name)
+		return fs.remove(this.dirs[kind] + '/' + name)
 			.then(() => this.refreshFiles(kind))
 			.catch(e => ui.addNotification(null, E('p', _('Failed to delete: %s').format(e.message)), 'error'));
 	},
 
 	handleEdit(kind, name) {
 		const k = KINDS[kind];
-		const path = k.dir + '/' + name;
+		const dir = this.dirs[kind];
+		const path = dir + '/' + name;
 
 		return conf.read(path).then(model => {
 			const state = { text: model.serialize(), shown: model.serialize(), pendingRaw: null };
@@ -184,7 +257,7 @@ return L.view.extend({
 					if (state.pendingRaw != null)
 						model.setText(state.pendingRaw);
 
-					return L.resolveDefault(fs.exec('/bin/mkdir', [ '-p', k.dir ]), null)
+					return L.resolveDefault(fs.exec('/bin/mkdir', [ '-p', dir ]), null)
 						.then(() => base.flush(path, model, state.text));
 				}).then(() => {
 					ui.hideModal();

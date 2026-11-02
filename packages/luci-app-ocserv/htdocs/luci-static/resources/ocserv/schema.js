@@ -23,6 +23,21 @@ const TABS = [
 	[ 'headers',   _('HTTP headers') ]
 ];
 
+const GLOBAL_KEYS = [
+	'tcp-port', 'udp-port', 'listen-host', 'max-clients', 'rate-limit-ms', 'log-level',
+	'isolate-workers', 'device', 'ping-leases', 'route-add-cmd', 'route-del-cmd',
+	'try-mtu-discovery', 'auth-timeout', 'server-stats-reset-time',
+	'max-ban-score', 'ban-reset-time', 'ban-points-wrong-password',
+	'ban-points-connection', 'ban-points-kkdcp',
+	'connect-script', 'disconnect-script', 'use-utmp', 'use-occtl', 'occtl-socket-file',
+	'pid-file', 'chroot-dir', 'socket-file', 'run-as-user', 'run-as-group'
+];
+
+function scope(spec) {
+	const key = typeof(spec) == 'string' ? spec : spec.key;
+	return GLOBAL_KEYS.includes(key) ? 'global' : 'vhost';
+}
+
 const SERVER = [
 	/* general */
 	{ key: 'banner', type: 'str', quote: true, tab: 'general', title: _('Banner'),
@@ -239,6 +254,8 @@ const PER_USER = [
 
 return baseclass.extend({
 	TABS,
+	GLOBAL_KEYS,
+	scope,
 	SERVER,
 	PER_USER
 });

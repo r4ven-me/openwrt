@@ -30,9 +30,17 @@
 			"path": "ocserv/accounts"
 		}
 	},
+	"admin/vpn/ocserv/vhosts": {
+		"title": "Virtual Hosts",
+		"order": 4,
+		"action": {
+			"type": "view",
+			"path": "ocserv/vhosts"
+		}
+	},
 	"admin/vpn/ocserv/users": {
 		"title": "Sessions",
-		"order": 4,
+		"order": 5,
 		"action": {
 			"type": "view",
 			"path": "ocserv/users"
