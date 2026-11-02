@@ -96,6 +96,8 @@ function addConfOption(s, tab, spec, model) {
 	return o;
 }
 
+let filesChanged = false;
+
 /* Rejects instead of hanging the page when a call takes too long */
 function withTimeout(promise, ms, message) {
 	return Promise.race([
@@ -125,24 +127,37 @@ return baseclass.extend({
 		if (model.serialize() === original)
 			return Promise.resolve(original);
 
-		return conf.write(path, model).then(() => model.serialize());
+		return conf.write(path, model).then(() => {
+			filesChanged = true;
+			return model.serialize();
+		});
 	},
 
-	/* Native "Save & Apply": stage (form save), commit UCI, restart ocserv */
+	/* Native "Save & Apply": stage (form save), commit UCI, restart ocserv only if something changed.
+	   A restart drops every VPN session, including the one the administrator may be using. */
 	handleSaveApply(view, ev) {
-		return view.handleSave(ev).then(() => callUciCommit('ocserv')).then(() => {
-			return uci.load('ocserv');
-		}).then(() => {
-			const enable = uci.get('ocserv', 'config', 'enable');
+		filesChanged = false;
 
-			const tmo = _('The service did not answer within 20 seconds.');
+		return view.handleSave(ev).then(() => uci.changes()).then(changes => {
+			const pending = !!(changes && changes.ocserv && changes.ocserv.length);
+			return callUciCommit('ocserv').then(() => pending || filesChanged);
+		}).then(changed => {
+			if (!changed) {
+				ui.addNotification(null, E('p', _('There are no changes to apply; the service was not restarted.')), 'info');
+				return;
+			}
 
-			if (enable === '0')
-				return withTimeout(Promise.all([ callRcInit('ocserv', 'stop'), callRcInit('ocserv', 'disable') ]), 20000, tmo);
+			return uci.load('ocserv').then(() => {
+				const enable = uci.get('ocserv', 'config', 'enable');
+				const tmo = _('The service did not answer in time. If you are connected through this VPN, the restart has interrupted your connection: reload the page in a few seconds.');
 
-			return withTimeout(Promise.all([ callRcInit('ocserv', 'enable'), callRcInit('ocserv', 'restart') ]), 20000, tmo);
-		}).then(() => {
-			ui.addNotification(null, E('p', _('Configuration has been applied.')), 'info');
+				if (enable === '0')
+					return withTimeout(Promise.all([ callRcInit('ocserv', 'stop'), callRcInit('ocserv', 'disable') ]), 20000, tmo);
+
+				return withTimeout(Promise.all([ callRcInit('ocserv', 'enable'), callRcInit('ocserv', 'restart') ]), 20000, tmo);
+			}).then(() => {
+				ui.addNotification(null, E('p', _('Configuration has been applied.')), 'info');
+			});
 		}).catch(e => {
 			ui.addNotification(null, E('p', _('Failed to apply configuration: %s').format(e.message)), 'error');
 		});

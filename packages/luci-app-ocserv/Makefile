@@ -50,6 +50,12 @@ fi
 
 grep -qxF '/etc/ocserv/' "$${root}/etc/sysupgrade.conf" 2>/dev/null || \
 	echo '/etc/ocserv/' >> "$${root}/etc/sysupgrade.conf"
+
+# rpcd keeps the old ucode plugin in memory: without a restart the new LuCI pages call methods
+# with arguments the old plugin rejects ("Invalid argument"), and lists look empty.
+if [ -z "$${root}" ] && [ -x /etc/init.d/rpcd ]; then
+	( sleep 2; /etc/init.d/rpcd restart >/dev/null 2>&1 ) &
+fi
 exit 0
 endef
 
