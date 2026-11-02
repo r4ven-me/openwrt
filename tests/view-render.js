@@ -258,15 +258,34 @@ function expect(label, cond) { if (cond) console.log('OK  ', label); else { fail
 		{ cn: 'old', serial: '01', status: 'valid', expires: '2036-10-26 15:08', revoked: null, has_p12: true, has_key: false, has_crt: true, ip: '', via: '' },
 		{ cn: 'gone', serial: '03', status: 'revoked', expires: '2036-10-26 15:08', revoked: '2026-10-29 10:00', has_p12: false, has_key: false, has_crt: false, ip: '', via: '' }
 	];
-	for (const data of [ {}, { certs: ocCerts, ca: true, ifaces: [ 'wan', 'oc0' ], pbr: true }, { certs: ocCerts, ca: true, ifaces: [], pbr: false } ]) {
+	for (const data of [ {}, { error: 'rpc failed' }, { certs: ocCerts, ca: true, ifaces: [ 'wan', 'oc0' ], pbr: true }, { certs: ocCerts, ca: true, ifaces: [], pbr: false } ]) {
 		try {
-			const out = load('view/ocserv/certs.js', { rpc, ui, L }, OC_RES).render(data);
+			const out = load('view/ocserv/certs.js', { rpc, ui, base: { loadStyles() {} }, L }, OC_RES).render(data);
 			if (!out) throw new Error('render() returned nothing');
 			console.log('OK   ocserv certs: render');
 		} catch (e) {
 			failed++;
 			console.log('FAIL ocserv certs: render -', e.message);
 		}
+	}
+
+	/* ocserv: sessions page (several users, byte counters from sysfs) */
+	try {
+		const occtl = JSON.stringify([
+			{ ID: 1, Username: 'desktop', Groupname: '(none)', vhost: 'default', Device: 'vpns0', 'Remote IP': '1.2.3.4', IPv4: '10.10.100.2', 'TLS ciphersuite': '(TLS1.3)-X', State: 'connected', '_Connected at': 1793657213 },
+			{ ID: 2, Username: 'router', Groupname: '(none)', vhost: 'default', Device: 'vpns1', 'Remote IP': '5.6.7.8', IPv4: '10.10.100.3', State: 'connected' }
+		]);
+		const ocFs = { exec: () => Promise.resolve({ stdout: occtl }), read: p => Promise.resolve(p.endsWith('rx_bytes') ? '2048\n' : '1048576\n') };
+		const v = load('view/ocserv/users.js', { form: {}, fs: ocFs, ui, base: { loadStyles() {} }, L: Object.assign({ bind: (f, t, ...a) => f.bind(t, ...a), uci: { load: () => Promise.resolve() } }, L) }, OC_RES);
+		const out = await v.render(await v.load());
+		if (!out) throw new Error('render() returned nothing');
+		const text = JSON.stringify(out);
+		for (const want of [ 'router', 'desktop', '2.0 KiB', '1.0 MiB' ])
+			if (!text.includes(want)) throw new Error('missing ' + want);
+		console.log('OK   ocserv sessions: both users, formatted counters');
+	} catch (e) {
+		failed++;
+		console.log('FAIL ocserv sessions -', e.message);
 	}
 
 	process.exit(failed ? 1 : 0);

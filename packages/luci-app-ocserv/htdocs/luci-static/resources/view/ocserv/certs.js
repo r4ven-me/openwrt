@@ -2,6 +2,7 @@
 'require rpc';
 'require ui';
 'require uci';
+'require ocserv.base as base';
 
 /* Client certificate management for OpenConnect VPN.
    Licensed to the public under the Apache License 2.0.
@@ -48,7 +49,7 @@ return L.view.extend({
 			this.vhosts = uci.sections('ocserv', 'vhost');
 			const requested = new URLSearchParams(window.location.search).get('vhost') || '';
 			this.vhost = this.vhosts.some(s => s['.name'] == requested) ? requested : '';
-			return L.resolveDefault(callList(this.vhost), {});
+			return callList(this.vhost).catch(e => ({ error: e.message }));
 		});
 	},
 
@@ -171,18 +172,27 @@ return L.view.extend({
 	},
 
 	reload() {
-		return callList(this.vhost).then(data => {
+		return callList(this.vhost).catch(e => ({ error: e.message })).then(data => {
+			this.showError(data);
 			this.ifaces = data.ifaces || [];
 			this.pbr = data.pbr !== false;
 			this.fillTable(data);
 		});
 	},
 
+	/* a failed call must not look like "no certificates" */
+	showError(data) {
+		if (this.errorBox)
+			this.errorBox.replaceChildren(data.error
+				? E('div', { 'class': 'alert-message error' }, _('Failed to load the certificate list: %s').format(data.error))
+				: '');
+	},
+
 	fillTable(data) {
 		const certs = data.certs || [];
 		const rows = certs.map(c => {
 			const valid = c.status == 'valid';
-			const ip = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'value': c.ip, 'size': 14, 'disabled': valid ? null : '' });
+			const ip = E('input', { 'type': 'text', 'class': 'cbi-input-text ocserv-ip', 'value': c.ip, 'disabled': valid ? null : '' });
 			const via = this.viaSelectEl(c.via);
 			via.disabled = !valid || !this.pbr;
 			const dl = (kind, label, has) => has ? E('button', {
@@ -196,7 +206,7 @@ return L.view.extend({
 				E('td', { 'class': 'td' }, valid ? via : ''),
 				E('td', { 'class': 'td' }, c.expires),
 				E('td', { 'class': 'td' }, c.status == 'revoked' ? _('Revoked') + ' (' + c.revoked + ')' : _('Valid')),
-				E('td', { 'class': 'td cbi-section-actions' }, valid ? [
+				E('td', { 'class': 'td ocserv-actions' }, valid ? [
 					E('button', {
 						'class': 'cbi-button cbi-button-save',
 						'click': ui.createHandlerFn(this, 'handleSetUser', c, ip, via)
@@ -218,7 +228,7 @@ return L.view.extend({
 			E('th', { 'class': 'th' }, _('Exit interface')),
 			E('th', { 'class': 'th' }, _('Expires')),
 			E('th', { 'class': 'th' }, _('Status')),
-			E('th', { 'class': 'th cbi-section-actions' }, '')
+			E('th', { 'class': 'th ocserv-actions' }, '')
 		]);
 
 		if (!rows.length)
@@ -236,14 +246,18 @@ return L.view.extend({
 		this.pwInput = E('input', { 'type': 'password', 'class': 'cbi-input-password', 'autocomplete': 'new-password' });
 		this.ipInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': _('automatic') });
 		this.viaSelect = this.viaSelectEl('');
-		this.table = E('table', { 'class': 'table' });
+		this.table = E('table', { 'class': 'table ocserv-table' });
+		this.errorBox = E('div');
+		base.loadStyles();
 		this.fillTable(data);
+		this.showError(data);
 
 		return E('div', [
 			E('h2', _('OpenConnect VPN: client certificates')),
 			E('div', { 'class': 'cbi-map-descr' },
 				_('Certificates are signed by the server CA and exported as a password-protected PKCS#12 (.p12) file for import into the client. Enable "certificate" authentication on the Server Settings page to use them.')),
 			this.renderVhostSelector(),
+			this.errorBox,
 			data.pbr === false ? E('div', { 'class': 'alert-message warning' },
 				_('The pbr package is not installed: the exit interface cannot be chosen.')) : '',
 			data.ca === false ? E('div', { 'class': 'alert-message warning' },
@@ -279,7 +293,7 @@ return L.view.extend({
 
 			E('div', { 'class': 'cbi-section' }, [
 				E('h3', _('Issued certificates')),
-				this.table
+				E('div', { 'class': 'ocserv-scroll' }, this.table)
 			])
 		]);
 	},

@@ -2,6 +2,7 @@
 'require form';
 'require fs';
 'require ui';
+'require ocserv.base as base';
 
 /* OpenConnect VPN JavaScript for LuCI 
    Converted from Lua to JavaScript by @systemcrash
@@ -81,79 +82,118 @@ return L.view.extend({
 		});
 	},
 
+	formatBytes(n) {
+		n = Number(n);
+		if (!isFinite(n) || n < 0)
+			return '';
+		const units = [ 'B', 'KiB', 'MiB', 'GiB', 'TiB' ];
+		let i = 0;
+		while (n >= 1024 && i < units.length - 1) {
+			n /= 1024;
+			i++;
+		}
+		return (i ? n.toFixed(1) : String(n)) + ' ' + units[i];
+	},
+
+	formatTime(value) {
+		const t = Number(value);
+		if (!isFinite(t) || t <= 0)
+			return { text: value || '', sub: '' };
+		const secs = Math.max(0, Math.floor(Date.now() / 1000 - t));
+		const d = Math.floor(secs / 86400), h = Math.floor(secs % 86400 / 3600), m = Math.floor(secs % 3600 / 60);
+		return {
+			text: new Date(t * 1000).toLocaleString(),
+			sub: (d ? d + 'd ' : '') + (d || h ? h + 'h ' : '') + m + 'm'
+		};
+	},
+
+	/* byte counters of the tunnel device, which are always present (occtl may omit them) */
+	readCounters(users) {
+		return Promise.all(users.map(user => {
+			if (!user.device || !/^[A-Za-z0-9_.-]+$/.test(user.device))
+				return null;
+			const base = '/sys/class/net/' + user.device + '/statistics/';
+			return Promise.all([
+				L.resolveDefault(fs.read(base + 'rx_bytes'), null),
+				L.resolveDefault(fs.read(base + 'tx_bytes'), null)
+			]).then(([ rx, tx ]) => {
+				if (rx != null)
+					user.rx = rx.trim();
+				if (tx != null)
+					user.tx = tx.trim();
+			});
+		}));
+	},
+
 	render([occtl_output]) {
 		const users = this.parseUsers(occtl_output);
 		const hasVhosts = users.some(user => user.vhost != null);
 
-		const m = new form.Map('ocserv', _('OpenConnect VPN'));
+		base.loadStyles();
 
-		// Active Users section
-		const activeSection = m.section(form.TypedSection, '__active_users__', _('Active users'));
-		activeSection.anonymous = true;
-		activeSection.cfgsections = function() { return ['_active']; };
+		return this.readCounters(users).then(() => {
+			const head = E('tr', { 'class': 'tr table-titles' }, [
+				E('th', { 'class': 'th' }, _('ID')),
+				E('th', { 'class': 'th' }, _('User')),
+				...(hasVhosts ? [ E('th', { 'class': 'th' }, _('VHost')) ] : []),
+				E('th', { 'class': 'th' }, _('VPN address')),
+				E('th', { 'class': 'th' }, _('Remote IP')),
+				E('th', { 'class': 'th' }, _('Connected')),
+				E('th', { 'class': 'th' }, _('Received')),
+				E('th', { 'class': 'th' }, _('Sent')),
+				E('th', { 'class': 'th' }, _('Cipher')),
+				E('th', { 'class': 'th ocserv-actions' }, _('Actions'))
+			]);
 
-		// Use a custom render to display active users table
-		activeSection.render = L.bind(function() {
-			const table = E('div', { 'class': 'table cbi-section-table' }, [
-				E('div', { 'class': 'tr table-titles' }, [
-					E('div', { 'class': 'th' }, _('ID')),
-					E('div', { 'class': 'th' }, _('Username')),
-					E('div', { 'class': 'th' }, _('Group')),
-					...(hasVhosts ? [ E('div', { 'class': 'th' }, _('VHost')) ] : []),
-					E('div', { 'class': 'th' }, _('VPN IPv4')),
-					E('div', { 'class': 'th' }, _('VPN IPv6')),
-					E('div', { 'class': 'th' }, _('Remote IP')),
-					E('div', { 'class': 'th' }, _('Device')),
-					E('div', { 'class': 'th' }, _('Time')),
-					E('div', { 'class': 'th' }, _('Cipher')),
-					E('div', { 'class': 'th' }, _('Status')),
-					E('div', { 'class': 'th' }, _('Tx')),
-					E('div', { 'class': 'th' }, _('Rx')),
-					E('div', { 'class': 'th cbi-section-actions' }, _('Actions'))
+			const rows = users.map(user => {
+				const time = this.formatTime(user.time);
+				const addr = [ user.vpn_ip, user.vpn_ip6 ].filter(Boolean);
+
+				return E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td', 'data-title': _('ID') }, user.id),
+					E('td', { 'class': 'td', 'data-title': _('User') }, [
+						user.user || '',
+						E('span', { 'class': 'ocserv-sub' }, [ user.group && user.group != '(none)' ? user.group : '' ])
+					]),
+					...(hasVhosts ? [ E('td', { 'class': 'td', 'data-title': _('VHost') }, user.vhost || '') ] : []),
+					E('td', { 'class': 'td', 'data-title': _('VPN address') },
+						addr.length ? addr.map(a => E('div', a)) : ''),
+					E('td', { 'class': 'td', 'data-title': _('Remote IP') }, [
+						user.ip || '',
+						E('span', { 'class': 'ocserv-sub' }, [ user.device || '' ])
+					]),
+					E('td', { 'class': 'td', 'data-title': _('Connected') }, [
+						time.text,
+						E('span', { 'class': 'ocserv-sub' }, [ time.sub ])
+					]),
+					E('td', { 'class': 'td', 'data-title': _('Received') }, this.formatBytes(user.rx)),
+					E('td', { 'class': 'td', 'data-title': _('Sent') }, this.formatBytes(user.tx)),
+					E('td', { 'class': 'td ocserv-wrap', 'data-title': _('Cipher') }, [
+						user.cipher || '',
+						E('span', { 'class': 'ocserv-sub' }, [ user.status || '' ])
+					]),
+					E('td', { 'class': 'td ocserv-actions' },
+						E('button', {
+							'class': 'cbi-button cbi-button-remove',
+							'click': L.bind(this.handleDisconnect, this, user.id)
+						}, _('Disconnect')))
+				]);
+			});
+
+			if (!rows.length)
+				rows.push(E('tr', { 'class': 'tr placeholder' },
+					E('td', { 'class': 'td', 'colspan': hasVhosts ? 10 : 9 },
+						E('em', _('No active sessions.')))));
+
+			return E('div', { 'class': 'cbi-map' }, [
+				E('h2', _('OpenConnect VPN')),
+				E('div', { 'class': 'cbi-section' }, [
+					E('h3', _('Active users')),
+					E('div', { 'class': 'ocserv-scroll' },
+						E('table', { 'class': 'table ocserv-table' }, [ head, ...rows ]))
 				])
 			]);
-
-			if (users.length === 0) {
-				table.appendChild(
-					E('div', { 'class': 'tr placeholder' }, [
-						E('div', { 'class': 'td', 'colspan': 13 },
-							E('em', _('Collecting data...')))
-					])
-				);
-			} else {
-				for (let user of users) {
-					table.appendChild(
-						E('div', { 'class': 'tr' }, [
-							E('div', { 'class': 'td', 'data-title': _('ID') }, user.id),
-							E('div', { 'class': 'td', 'data-title': _('Username') }, user.user),
-							E('div', { 'class': 'td', 'data-title': _('Group') }, user.group),
-							...(hasVhosts ? [ E('div', { 'class': 'td', 'data-title': _('VHost') }, user.vhost) ] : []),
-							E('div', { 'class': 'td', 'data-title': _('VPN IPv4') }, user.vpn_ip),
-							E('div', { 'class': 'td', 'data-title': _('VPN IPv6') }, user.vpn_ip6),
-							E('div', { 'class': 'td', 'data-title': _('Remote IP') }, user.ip),
-							E('div', { 'class': 'td', 'data-title': _('Device') }, user.device),
-							E('div', { 'class': 'td', 'data-title': _('Time') }, user.time),
-							E('div', { 'class': 'td', 'data-title': _('Cipher') }, user.cipher),
-							E('div', { 'class': 'td', 'data-title': _('Status') }, user.status),
-							E('div', { 'class': 'td', 'data-title': _('Tx') }, user.tx),
-							E('div', { 'class': 'td', 'data-title': _('Rx') }, user.rx),
-							E('div', { 'class': 'td cbi-section-actions' }, 
-								E('button', {
-									'class': 'cbi-button cbi-button-remove',
-									'click': L.bind(this.handleDisconnect, this, user.id)
-								}, _('Disconnect')))
-						])
-					);
-				}
-			}
-
-			return E('div', { 'class': 'cbi-section' }, [
-				E('h3', _('Active users')),
-				table
-			]);
-		}, this);
-
-		return m.render();
+		});
 	},
 
 	handleSave: null,

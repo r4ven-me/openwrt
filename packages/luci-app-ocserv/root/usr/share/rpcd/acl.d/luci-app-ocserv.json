@@ -13,6 +13,9 @@
 					"read",
 					"list"
 				],
+				"/sys/class/net/*/statistics/*": [
+					"read"
+				],
 				"/proc/net/ipv6_route": [
 					"read"
 				],

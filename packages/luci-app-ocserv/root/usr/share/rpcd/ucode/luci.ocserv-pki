@@ -104,8 +104,9 @@ function openssl_cnf(ctx) {
 	]);
 }
 
-function run(argv) {
-	return system(argv, 60000) == 0;
+/* rpcd is single-threaded for this plugin: keep every external command short */
+function run(argv, timeout) {
+	return system(argv, timeout ?? 20000) == 0;
 }
 
 function ensure_pki(ctx) {
@@ -121,7 +122,8 @@ function ensure_pki(ctx) {
 		if (fs.access(ctx.ca_cert) || fs.access(ctx.ca_key))
 			return 'Incomplete CA certificate/key pair in ' + ctx.root;
 		if (!valid_domain(ctx.domain) ||
-		    !run([ 'openssl', 'genrsa', '-out', ctx.ca_key, '3072' ]) ||
+		    /* EC P-256 takes milliseconds; RSA 3072 can block a small router for minutes */
+		    !run([ 'openssl', 'ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', ctx.ca_key ]) ||
 		    !run([ 'openssl', 'req', '-x509', '-new', '-sha256', '-days', '3650',
 		           '-key', ctx.ca_key, '-subj', '/CN=' + ctx.domain + ' VPN CA', '-out', ctx.ca_cert ]))
 			return 'Failed to generate the virtual host CA in ' + ctx.root;
@@ -502,7 +504,7 @@ const methods = {
 
 			fs.writefile(pwf, pw);
 
-			if (!run([ 'openssl', 'genrsa', '-out', key, '2048' ]))
+			if (!run([ 'openssl', 'genrsa', '-out', key, '2048' ], 50000))
 				step = 'key generation';
 			else if (!run([ 'openssl', 'req', '-new', '-config', ctx.cnf, '-key', key, '-subj', '/CN=' + cn, '-out', csr ]))
 				step = 'request creation';

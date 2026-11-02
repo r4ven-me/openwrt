@@ -418,3 +418,35 @@ msgid ""
 msgstr ""
 "Просмотр CA-сертификата, используемого этим сервером. Сохраните его как "
 "«ca.pem» для импорта клиентам."
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "Failed to load the certificate list: %s"
+msgstr "Не удалось загрузить список сертификатов: %s"
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "Creating virtual host…"
+msgstr "Создание виртуального хоста…"
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "The service did not answer within 20 seconds."
+msgstr "Служба не ответила за 20 секунд."
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "VPN address"
+msgstr "VPN-адрес"
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "Connected"
+msgstr "Подключён"
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "Received"
+msgstr "Получено"
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "Sent"
+msgstr "Отправлено"
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "No active sessions."
+msgstr "Нет активных сессий."

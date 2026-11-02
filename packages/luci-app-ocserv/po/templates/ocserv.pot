@@ -378,3 +378,35 @@ msgid ""
 "View the CA certificate used by this server. You will need to save it as "
 "'ca.pem' and import it into the clients."
 msgstr ""
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "Failed to load the certificate list: %s"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "Creating virtual host…"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "The service did not answer within 20 seconds."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "VPN address"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "Connected"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "Received"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "Sent"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/ocserv
+msgid "No active sessions."
+msgstr ""

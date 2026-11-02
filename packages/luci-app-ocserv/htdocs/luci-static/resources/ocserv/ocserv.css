@@ -1,0 +1,47 @@
+/* Shared table layout for the OpenConnect VPN views. */
+
+.ocserv-table {
+	width: 100%;
+	table-layout: auto;
+}
+
+.ocserv-table .th,
+.ocserv-table .td {
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+/* long values (cipher, user agent) may wrap instead of stretching the table */
+.ocserv-table .td.ocserv-wrap {
+	white-space: normal;
+	word-break: break-word;
+}
+
+.ocserv-table .td.ocserv-actions {
+	text-align: right;
+}
+
+.ocserv-table .td.ocserv-actions .cbi-button {
+	margin: 1px 0 1px 4px;
+}
+
+.ocserv-table input.ocserv-ip {
+	width: 11em;
+	min-width: 0;
+}
+
+.ocserv-table select {
+	min-width: 9em;
+	max-width: 14em;
+}
+
+.ocserv-sub {
+	display: block;
+	font-size: 85%;
+	opacity: .7;
+}
+
+/* narrow screens: wide tables scroll instead of crushing the columns */
+.ocserv-scroll {
+	overflow-x: auto;
+}

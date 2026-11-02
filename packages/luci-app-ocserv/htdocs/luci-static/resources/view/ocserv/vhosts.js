@@ -214,11 +214,16 @@ return L.view.extend({
 		if (!value)
 			return ui.addNotification(null, E('p', _('The domain name must not be empty.')), 'error');
 
+		ui.showModal(_('Creating virtual host…'), [ E('p', { 'class': 'spinning' }, _('Please wait.')) ]);
+
 		return callCreateVhost(value).then(res => {
 			if (res.error)
 				throw new Error(res.error);
-			window.location.reload();
+			if (res.warning)
+				ui.addNotification(null, E('p', res.warning), 'warning');
+			window.location.assign(editUrl(res.id));
 		}).catch(e => {
+			ui.hideModal();
 			ui.addNotification(null, E('p', _('Failed to create virtual host: %s').format(e.message)), 'error');
 		});
 	},

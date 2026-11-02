@@ -96,8 +96,29 @@ function addConfOption(s, tab, spec, model) {
 	return o;
 }
 
+/* Rejects instead of hanging the page when a call takes too long */
+function withTimeout(promise, ms, message) {
+	return Promise.race([
+		promise,
+		new Promise((resolve, reject) => setTimeout(() => reject(new Error(message)), ms))
+	]);
+}
+
 return baseclass.extend({
 	addConfOption,
+	withTimeout,
+
+	/* Shared table styles, loaded once per page */
+	loadStyles() {
+		if (document.getElementById('ocserv-css'))
+			return;
+
+		document.head.appendChild(E('link', {
+			'id': 'ocserv-css',
+			'rel': 'stylesheet',
+			'href': L.resource('ocserv/ocserv.css')
+		}));
+	},
 
 	/* Writes the model back when something changed */
 	flush(path, model, original) {
@@ -114,10 +135,12 @@ return baseclass.extend({
 		}).then(() => {
 			const enable = uci.get('ocserv', 'config', 'enable');
 
-			if (enable === '0')
-				return Promise.all([ callRcInit('ocserv', 'stop'), callRcInit('ocserv', 'disable') ]);
+			const tmo = _('The service did not answer within 20 seconds.');
 
-			return Promise.all([ callRcInit('ocserv', 'enable'), callRcInit('ocserv', 'restart') ]);
+			if (enable === '0')
+				return withTimeout(Promise.all([ callRcInit('ocserv', 'stop'), callRcInit('ocserv', 'disable') ]), 20000, tmo);
+
+			return withTimeout(Promise.all([ callRcInit('ocserv', 'enable'), callRcInit('ocserv', 'restart') ]), 20000, tmo);
 		}).then(() => {
 			ui.addNotification(null, E('p', _('Configuration has been applied.')), 'info');
 		}).catch(e => {
