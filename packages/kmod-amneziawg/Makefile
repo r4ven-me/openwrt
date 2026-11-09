@@ -15,11 +15,14 @@ MAKE_PATH:=src
 
 include $(INCLUDE_DIR)/package.mk
 
-define KernelPackage/amneziawg
+define KernelPackage/amneziawg-r4ven-me
 	SECTION:=kernel
 	CATEGORY:=Kernel modules
 	SUBMENU:=Network Support
 	TITLE:=AmneziaWG VPN Kernel Module
+	PROVIDES:=kmod-amneziawg
+	CONFLICTS:=kmod-amneziawg
+	REPLACES:=kmod-amneziawg
 	FILES:=$(PKG_BUILD_DIR)/$(MAKE_PATH)/amneziawg.ko
 	DEPENDS:= \
 		+kmod-udptunnel4 \
@@ -43,4 +46,4 @@ define Build/Compile
 		modules
 endef
 
-$(eval $(call KernelPackage,amneziawg))
+$(eval $(call KernelPackage,amneziawg-r4ven-me))

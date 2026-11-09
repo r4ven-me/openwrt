@@ -22,7 +22,7 @@ RUN cd sdk \
     && mkdir -p package/luci-app-amneziawg \
     && cp ~/pkgseed/Makefile package/luci-app-amneziawg/ \
     && sed -i 's#\.\./\.\./luci\.mk#$(TOPDIR)/feeds/luci/luci.mk#' package/luci-app-amneziawg/Makefile \
-    && printf 'CONFIG_PACKAGE_kmod-amneziawg=m\nCONFIG_PACKAGE_amneziawg-tools=m\nCONFIG_PACKAGE_pbr=m\nCONFIG_PACKAGE_luci-app-amneziawg=m\n' >> .config \
+    && printf 'CONFIG_PACKAGE_kmod-amneziawg-r4ven-me=m\nCONFIG_PACKAGE_amneziawg-tools-r4ven-me=m\nCONFIG_PACKAGE_pbr=m\nCONFIG_PACKAGE_luci-app-amneziawg-r4ven-me=m\n' >> .config \
     && make defconfig \
     && make package/kernel/linux/compile -j"$(nproc)"
 # Sources come from github: retry, the connection is sometimes reset
@@ -38,6 +38,6 @@ COPY --chown=builder packages/luci-proto-amneziawg/Makefile /home/builder/protos
 RUN cd sdk \
     && mkdir -p package/luci-proto-amneziawg \
     && cp ~/protoseed/Makefile package/luci-proto-amneziawg/ \
-    && printf 'CONFIG_PACKAGE_luci-proto-amneziawg=m\nCONFIG_PACKAGE_luci-lib-uqr=m\nCONFIG_PACKAGE_resolveip=m\n' >> .config \
+    && printf 'CONFIG_PACKAGE_luci-proto-amneziawg-r4ven-me=m\nCONFIG_PACKAGE_luci-lib-uqr=m\nCONFIG_PACKAGE_resolveip=m\n' >> .config \
     && make defconfig \
     && make package/luci-proto-amneziawg/compile -j"$(nproc)"

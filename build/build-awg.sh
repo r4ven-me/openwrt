@@ -1,21 +1,26 @@
 #!/bin/bash
-# Runs inside the container: builds kmod-amneziawg, amneziawg-tools, luci-app-amneziawg and luci-proto-amneziawg into /out
+# Builds the suffixed AmneziaWG packages and Kornord theme into /out.
 set -euo pipefail
 cd ~/sdk
-rm -rf package/luci-app-amneziawg package/luci-proto-amneziawg
+rm -f /out/*.apk
+rm -rf package/luci-app-amneziawg package/luci-proto-amneziawg package/luci-i18n-amneziawg-ru-r4ven-me package/luci-theme-kornord
 cp -r /src package/luci-app-amneziawg
 cp -r /src-proto package/luci-proto-amneziawg
+cp -r /src-i18n package/luci-i18n-amneziawg-ru-r4ven-me
+cp -r /src-theme package/luci-theme-kornord
 sed -i 's#\.\./\.\./luci\.mk#$(TOPDIR)/feeds/luci/luci.mk#' package/luci-app-amneziawg/Makefile
+sed -i '/include $(TOPDIR)\/rules.mk/a PKG_NAME:=luci-theme-kornord-r4ven-me\nPKG_PROVIDES:=luci-theme-kornord' package/luci-theme-kornord/Makefile
+sed -i 's/Package\/luci-theme-kornord\/postrm/Package\/luci-theme-kornord-r4ven-me\/postrm/' package/luci-theme-kornord/Makefile
 make defconfig
 # drop the stub packages built into the image
-find bin \( -name 'luci-app-amneziawg*' -o -name 'luci-proto-amneziawg*' -o -name 'luci-i18n-amneziawg*' \) | xargs -r rm -v
+find bin \( -name 'luci-app-amneziawg-r4ven-me*.apk' -o -name 'luci-proto-amneziawg-r4ven-me*.apk' -o -name 'luci-i18n-amneziawg-ru-r4ven-me*.apk' -o -name 'luci-theme-kornord-r4ven-me*.apk' \) | xargs -r rm -v
 # The LuCI packages only copy files. Going through the top-level target (package/<name>/compile) would drag in
 # their dependencies and repack every kernel module each time (~5 min per package); building in the package
 # directory takes seconds. kmod-amneziawg and amneziawg-tools come from the image.
-for p in luci-app-amneziawg luci-proto-amneziawg; do
+for p in luci-app-amneziawg luci-proto-amneziawg luci-i18n-amneziawg-ru-r4ven-me luci-theme-kornord; do
 	make -C "package/$p" TOPDIR="$HOME/sdk" compile V=s
 done
-find bin \( -name 'luci-app-amneziawg*' -o -name 'luci-proto-amneziawg*' -o -name 'luci-i18n-amneziawg*' -o -name 'kmod-amneziawg*' -o -name 'amneziawg-tools*' \) -name '*.apk' -exec cp -v {} /out/ \;
+find bin -name '*-r4ven-me*.apk' -exec cp -v {} /out/ \;
 APK=~/sdk/staging_dir/host/bin/apk
 mkdir -p /tmp/trusted && cp /keys/r4ven-apk.pub /tmp/trusted/
 for f in /out/*.apk; do

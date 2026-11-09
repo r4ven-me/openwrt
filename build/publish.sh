@@ -5,7 +5,7 @@ APK=~/sdk/staging_dir/host/bin/apk
 mkdir -p /out
 rm -f /out/*.apk /out/packages.adb
 declare -A latest
-for f in /dist/*.apk /dist-awg/*.apk; do
+for f in /dist/*-r4ven-me-*.apk /dist-awg/*-r4ven-me-*.apk; do
 	[ -e "$f" ] || continue
 	name=$(basename "$f" | sed 's/-[0-9].*//')
 	cur=${latest[$name]:-}

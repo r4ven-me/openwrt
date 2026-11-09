@@ -6,14 +6,16 @@
 
 include $(TOPDIR)/rules.mk
 
+PKG_NAME:=luci-app-ocserv-r4ven-me
 LUCI_TITLE:=LuCI Support for OpenConnect VPN
 LUCI_DEPENDS:=+luci-base +ocserv +certtool +openssl-util
+PKG_PROVIDES:=luci-app-ocserv
 
 PKG_LICENSE:=Apache-2.0
 PKG_MAINTAINER:=Nikos Mavrogiannopoulos <n.mavrogiannopoulos@gmail.com>
 
 # Defined before luci.mk so the package framework registers a pre-deinstall hook.
-define Package/luci-app-ocserv/prerm
+define Package/luci-app-ocserv-r4ven-me/prerm
 #!/bin/sh
 [ "$${PKG_UPGRADE}" = 1 ] && exit 0
 root="$${IPKG_INSTROOT}"
@@ -32,7 +34,7 @@ include ../../luci.mk
 
 # /etc/ocserv holds the CA, PKI and issued client certificates, generated at runtime (not
 # shipped by the ocserv package, so sysupgrade would otherwise drop them on a reflash).
-define Package/luci-app-ocserv/postinst
+define Package/luci-app-ocserv-r4ven-me/postinst
 #!/bin/sh
 root="$${IPKG_INSTROOT}"
 src="$${root}/usr/libexec/ocserv-multivhost.init"

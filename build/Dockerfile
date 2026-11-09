@@ -25,6 +25,6 @@ RUN cd sdk \
     && mkdir -p package/luci-app-ocserv \
     && cp ~/pkgseed/Makefile package/luci-app-ocserv/ \
     && sed -i 's#\.\./\.\./luci\.mk#$(TOPDIR)/feeds/luci/luci.mk#' package/luci-app-ocserv/Makefile \
-    && echo 'CONFIG_PACKAGE_luci-app-ocserv=m' >> .config \
+    && echo 'CONFIG_PACKAGE_luci-app-ocserv-r4ven-me=m' >> .config \
     && make defconfig \
     && make package/luci-app-ocserv/compile -j"$(nproc)"

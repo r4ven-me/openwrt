@@ -1,5 +1,6 @@
 IMAGE := luci-app-ocserv-build
 IMAGE_AWG := luci-app-amneziawg-build
+KORNORD_THEME ?= /home/lans/Cloud/Projects/public/kornord/luci-theme-kornord
 
 KDBX ?= /home/lans/Home/Webdav/KeePass/keepasshome.kdbx
 ENTRY ?= 09. CRYPT/r4ven-apk.pem
@@ -23,9 +24,10 @@ build:
 	@$(call with_signing_key,docker run --rm -v $(CURDIR)/packages/luci-app-ocserv:/src:ro -v $(CURDIR)/build/build.sh:/build.sh:ro -v "$$tmp":/keys:ro -v $(CURDIR)/dist:/out $(IMAGE) /build.sh)
 
 build-awg:
+	test -f "$(KORNORD_THEME)/Makefile" || { echo "Kornord theme not found: $(KORNORD_THEME)" >&2; exit 1; }
 	mkdir -p dist-awg
 	docker build -f build/Dockerfile.awg -t $(IMAGE_AWG) .
-	@$(call with_signing_key,docker run --rm -v $(CURDIR)/packages/luci-app-amneziawg:/src:ro -v $(CURDIR)/packages/luci-proto-amneziawg:/src-proto:ro -v $(CURDIR)/build/build-awg.sh:/build.sh:ro -v "$$tmp":/keys:ro -v $(CURDIR)/dist-awg:/out $(IMAGE_AWG) /build.sh)
+	@$(call with_signing_key,docker run --rm -v $(CURDIR)/packages/luci-app-amneziawg:/src:ro -v $(CURDIR)/packages/luci-proto-amneziawg:/src-proto:ro -v $(CURDIR)/packages/luci-i18n-amneziawg-ru-r4ven-me:/src-i18n:ro -v $(KORNORD_THEME):/src-theme:ro -v $(CURDIR)/build/build-awg.sh:/build.sh:ro -v "$$tmp":/keys:ro -v $(CURDIR)/dist-awg:/out $(IMAGE_AWG) /build.sh)
 
 # Builds the signed index of the latest packages into repo-out/<RELEASE>/<ARCH>/ (no push; see build/publish.sh)
 RELEASE ?= 25.12

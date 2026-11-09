@@ -20,20 +20,23 @@ include $(INCLUDE_DIR)/package.mk
 MAKE_PATH:=src
 MAKE_VARS += PLATFORM=linux
 
-define Package/amneziawg-tools
+define Package/amneziawg-tools-r4ven-me
   SECTION:=net
   CATEGORY:=Network
   SUBMENU:=VPN
   URL:=https://amnezia.org/
   MAINTAINER:=Amnezia Admin <admin@amnezia.org>
   TITLE:=AmneziaWG userspace control program (awg)
+  PROVIDES:=amneziawg-tools
+  CONFLICTS:=amneziawg-tools
+  REPLACES:=amneziawg-tools
   DEPENDS:= \
 	  +!BUSYBOX_CONFIG_IP:ip \
 	  +!BUSYBOX_CONFIG_FEATURE_IP_LINK:ip \
-	  +kmod-amneziawg
+	  +kmod-amneziawg-r4ven-me
 endef
 
-define Package/amneziawg-tools/description
+define Package/amneziawg-tools-r4ven-me/description
   Amnezia VPN — simple and free app to run a self-hosted VPN with
 	high privacy requirements.
 
@@ -41,7 +44,7 @@ define Package/amneziawg-tools/description
   `awg`, a netifd protocol helper, and a re-resolve watchdog script.
 endef
 
-define Package/amneziawg-tools/install
+define Package/amneziawg-tools-r4ven-me/install
 	$(INSTALL_DIR) $(1)/usr/bin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/src/wg $(1)/usr/bin/awg
 	$(INSTALL_BIN) ./files/amneziawg_watchdog $(1)/usr/bin/
@@ -49,4 +52,4 @@ define Package/amneziawg-tools/install
 	$(INSTALL_BIN) ./files/amneziawg.sh $(1)/lib/netifd/proto/
 endef
 
-$(eval $(call BuildPackage,amneziawg-tools))
+$(eval $(call BuildPackage,amneziawg-tools-r4ven-me))
