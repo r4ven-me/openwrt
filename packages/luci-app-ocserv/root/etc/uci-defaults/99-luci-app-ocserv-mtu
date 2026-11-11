@@ -1,0 +1,12 @@
+#!/bin/sh
+
+config=/etc/ocserv/ocserv.conf.template
+[ -f "$config" ] || exit 0
+
+if grep -q '^[[:space:]]*mtu[[:space:]]*=' "$config"; then
+	sed -i 's/^[[:space:]]*mtu[[:space:]]*=.*/mtu = 1400/' "$config"
+else
+	printf '\nmtu = 1400\n' >> "$config"
+fi
+
+exit 0

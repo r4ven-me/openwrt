@@ -82,7 +82,7 @@ const SERVER = [
 	  desc: _('Ping an address before leasing it to verify that it is not in use by another host') },
 	{ key: 'tunnel-all-dns', type: 'flag', tab: 'network', title: _('Tunnel all DNS'),
 	  desc: _('Tunnel all DNS queries via the VPN. This is the default when a default route is set.') },
-	{ key: 'mtu', type: 'int', tab: 'network', title: _('MTU'), datatype: 'uinteger',
+	{ key: 'mtu', type: 'int', tab: 'network', title: _('MTU'), datatype: 'uinteger', def: 1400,
 	  desc: _('Unset to assign the default MTU of the device') },
 	{ key: 'rx-data-per-sec', type: 'int', tab: 'network', title: _('Upload limit (bytes/s)'), datatype: 'uinteger',
 	  desc: _('Bandwidth restriction, global; can also be set per user or per group') },

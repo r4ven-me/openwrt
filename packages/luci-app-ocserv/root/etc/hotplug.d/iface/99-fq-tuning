@@ -1,0 +1,8 @@
+#!/bin/sh
+
+[ "$ACTION" = ifup ] || exit 0
+[ "$INTERFACE" = wan ] || exit 0
+[ -n "$DEVICE" ] || exit 0
+command -v tc >/dev/null 2>&1 || exit 0
+
+tc qdisc replace dev "$DEVICE" root fq limit 20000 flow_limit 1000
