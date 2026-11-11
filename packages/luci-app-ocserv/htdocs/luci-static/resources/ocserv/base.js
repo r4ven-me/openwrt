@@ -149,7 +149,7 @@ return baseclass.extend({
 
 			return uci.load('ocserv').then(() => {
 				const enable = uci.get('ocserv', 'config', 'enable');
-				const tmo = _('The service did not answer in time. If you are connected through this VPN, the restart has interrupted your connection: reload the page in a few seconds.');
+				const tmo = _('The service did not answer in time.');
 
 				if (enable === '0')
 					return withTimeout(Promise.all([ callRcInit('ocserv', 'stop'), callRcInit('ocserv', 'disable') ]), 20000, tmo);
@@ -157,6 +157,12 @@ return baseclass.extend({
 				return withTimeout(Promise.all([ callRcInit('ocserv', 'enable'), callRcInit('ocserv', 'restart') ]), 20000, tmo);
 			}).then(() => {
 				ui.addNotification(null, E('p', _('Configuration has been applied.')), 'info');
+			}, () => {
+				/* The configuration is already committed. A restart drops every VPN session, so
+				   when the administrator reaches LuCI through this VPN, the answer never arrives
+				   (timeout or "XHR request aborted"). This is expected, not a failed apply. */
+				ui.hideModal();
+				ui.addNotification(null, E('p', _('The configuration is saved and ocserv was restarted. If you are connected through this VPN, the restart has dropped your connection: reconnect, then reload the page.')), 'warning');
 			});
 		}).catch(e => {
 			ui.addNotification(null, E('p', _('Failed to apply configuration: %s').format(e.message)), 'error');

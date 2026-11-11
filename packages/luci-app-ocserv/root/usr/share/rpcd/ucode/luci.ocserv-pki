@@ -196,7 +196,9 @@ function pool_range(ctx) {
 	if (ip == null || mask == null)
 		return null;
 	let net = ip & mask, bcast = net | (~mask & 0xffffffff);
-	return { net, bcast, server: ip };
+	/* ocserv keeps the first address of the pool for itself: with a plain network
+	   address (10.0.0.0) the server is 10.0.0.1, and a client cannot get it */
+	return { net, bcast, server: ip == net ? net + 1 : ip };
 }
 
 /* explicit-ipv4 of every config-per-user file: { cn: ip } */
