@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-ocserv-r4ven-me
 LUCI_TITLE:=LuCI Support for OpenConnect VPN
-LUCI_DEPENDS:=+luci-base +ocserv +certtool +openssl-util +ip-full +jsonfilter
+LUCI_DEPENDS:=+luci-base +ocserv +certtool +openssl-util
 PKG_PROVIDES:=luci-app-ocserv
 
 PKG_LICENSE:=Apache-2.0
@@ -26,10 +26,6 @@ if [ -f "$${backup}" ]; then
 	cp "$${backup}" "$${dst}"
 	chmod 0755 "$${dst}"
 	rm -f "$${backup}"
-fi
-if [ -x "$${root}/etc/init.d/ocserv-exit" ]; then
-	"$${root}/etc/init.d/ocserv-exit" stop >/dev/null 2>&1
-	"$${root}/etc/init.d/ocserv-exit" disable >/dev/null 2>&1
 fi
 exit 0
 endef
@@ -52,11 +48,6 @@ if [ -f "$${src}" ]; then
 	fi
 	cp "$${src}" "$${dst}"
 	chmod 0755 "$${dst}"
-fi
-
-if [ -z "$${root}" ] && [ -x /etc/init.d/ocserv-exit ]; then
-	/etc/init.d/ocserv-exit enable
-	/etc/init.d/ocserv-exit restart >/dev/null 2>&1
 fi
 
 grep -qxF '/etc/ocserv/' "$${root}/etc/sysupgrade.conf" 2>/dev/null || \
