@@ -92,10 +92,15 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Only our two artifacts: docker/build-push-action adds *.dockerbuild records that cannot be downloaded.
       - uses: actions/download-artifact@v4
         with:
+          name: ocserv
           path: release
-          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: awg
+          path: release
       - run: ls -la release
       - name: "Create the GitHub Release (unsigned apks + apk-host)"
         env:
