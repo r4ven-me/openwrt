@@ -294,25 +294,18 @@ function exit_key(ctx, cn) {
 	return (ctx.id ? ctx.id : '-') + ':' + cn;
 }
 
-/* "exit through another client" entries: [ { key, ip, exit: '<vhost id>/<CN>' } ] ('' = default host) */
+/* "exit through another client" entries: [ { key, ip, exit } ] */
 function exit_read() {
 	let res = [];
 	for (let line in split(fs.readfile(EXITFILE) ?? '', '\n')) {
 		let f = split(trim(line), ' ');
-		if (length(f) != 3)
-			continue;
-		/* entries written before cross-vhost exits have no "<vhost>/" prefix: same vhost as the user */
-		let exit = f[2];
-		if (index(exit, '/') < 0) {
-			let vid = split(f[0], ':')[0];
-			exit = (vid == '-' ? '' : vid) + '/' + exit;
-		}
-		push(res, { key: f[0], ip: f[1], exit });
+		if (length(f) == 3)
+			push(res, { key: f[0], ip: f[1], exit: f[2] });
 	}
 	return res;
 }
 
-/* sets the client exit of a user (exit_cn = '<vhost id>/<CN>'); '' removes it. Returns true if the file changed. */
+/* sets the client exit of a user; exit_cn == '' removes it. Returns true if the file changed. */
 function exit_set(ctx, cn, ip, exit_cn) {
 	let key = exit_key(ctx, cn), old = exit_read(), out = [];
 	for (let e in old)
@@ -340,23 +333,13 @@ function valid_cn(cn) {
 	return type(cn) == 'string' && length(cn) <= 64 && match(cn, /^[A-Za-z0-9._-]+$/) != null;
 }
 
-/* "client:<vhost id>/<CN>" (id empty = default host) or the older "client:<CN>" (same vhost as the user) */
-function parse_client_via(ctx, via) {
-	if (type(via) != 'string' || index(via, CLIENT_VIA) != 0)
-		return null;
-	let rest = substr(via, length(CLIENT_VIA));
-	let m = match(rest, /^([A-Za-z0-9_]*)\/([A-Za-z0-9._-]+)$/);
-	if (m)
-		return length(m[2]) <= 64 ? { vid: m[1], cn: m[2] } : null;
-	return valid_cn(rest) ? { vid: ctx.id, cn: rest } : null;
-}
-
-function valid_via(ctx, via) {
+function valid_via(via) {
 	return type(via) == 'string' &&
-		(match(via, /^[A-Za-z0-9_]+$/) != null || parse_client_via(ctx, via) != null);
+		(match(via, /^[A-Za-z0-9_]+$/) != null ||
+		 (index(via, CLIENT_VIA) == 0 && valid_cn(substr(via, length(CLIENT_VIA)))));
 }
 
-/* exit of a user: an interface name (from its pbr policy), "client:<vhost id>/<CN>", or '' for the default route */
+/* exit of a user: an interface name (from its pbr policy), "client:<CN>", or '' for the default route */
 function via_of(c, ctx, cn) {
 	let key = exit_key(ctx, cn);
 	for (let e in exit_read())
@@ -473,28 +456,24 @@ function read_index(ctx) {
 
 /* via = '' removes the policy (the user goes out through the default route) */
 function apply_route(ctx, cn, ip, via) {
-	if (via && !valid_via(ctx, via))
+	if (via && !valid_via(via))
 		return { error: 'Invalid interface' };
 
-	let exit_cn = '', target = parse_client_via(ctx, via);
-	if (target) {
-		let tctx = context(target.vid);
-		if (tctx.error)
-			return { error: 'The vhost of the exit client was not found' };
-		if (tctx.id == ctx.id && target.cn == cn)
+	let exit_cn = '';
+	if (via && index(via, CLIENT_VIA) == 0) {
+		exit_cn = substr(via, length(CLIENT_VIA));
+		if (exit_cn == cn)
 			return { error: 'A client cannot exit through itself' };
 		let found = false;
-		for (let e in read_index(tctx))
-			if (e.cn == target.cn && e.status == 'valid')
+		for (let e in read_index(ctx))
+			if (e.cn == exit_cn && e.status == 'valid')
 				found = true;
 		if (!found)
 			return { error: 'No valid certificate for the exit client' };
 		/* a chain A -> B -> A would loop the traffic */
-		let back = ctx.id + '/' + cn;
 		for (let e in exit_read())
-			if (e.key == exit_key(tctx, target.cn) && e.exit == back)
+			if (e.key == exit_key(ctx, exit_cn) && e.exit == cn)
 				return { error: 'The exit client already exits through this client' };
-		exit_cn = target.vid + '/' + target.cn;
 		via = '';
 	}
 	let was_client = exit_set(ctx, cn, ip, exit_cn);
@@ -552,22 +531,8 @@ const methods = {
 				if (s['.name'] != 'loopback' && s.proto != 'amneziawg')
 					push(ifaces, s['.name']);
 			});
-			/* clients of every virtual host, valid ones only: any of them can be an exit */
-			let clients = [], hosts = [ { id: '', domain: '' } ];
-			c.foreach('ocserv', 'vhost', s => {
-				push(hosts, { id: s['.name'], domain: s.domain ?? s['.name'] });
-			});
-			for (let h in hosts) {
-				let hctx = context(h.id);
-				if (hctx.error)
-					continue;
-				for (let e in read_index(hctx))
-					if (e.status == 'valid')
-						push(clients, { vhost: h.id, domain: h.domain, cn: e.cn });
-			}
 			return {
 				certs: read_index(ctx),
-				clients,
 				ca: fs.access(ctx.ca_cert) ? true : false,
 				ifaces,
 				pbr: fs.access('/etc/init.d/pbr') ? true : false
@@ -590,7 +555,7 @@ const methods = {
 			if (type(pw) != 'string' || length(pw) < 1)
 				return { error: 'PKCS#12 password must not be empty' };
 
-			if (via && !valid_via(ctx, via))
+			if (via && !valid_via(via))
 				return { error: 'Invalid interface' };
 
 			let err = ensure_pki(ctx);
@@ -816,11 +781,9 @@ const methods = {
 
 			/* and its "exit through another client" entries */
 			let dropped = false;
-			for (let e in exit_read()) {
-				let kid = split(e.key, ':')[0], kcn = substr(e.key, length(kid) + 1);
-				if (kid == id || index(e.exit, id + '/') == 0)
-					dropped = exit_set(context(kid == '-' ? '' : kid), kcn, '', '') || dropped;
-			}
+			for (let e in exit_read())
+				if (index(e.key, id + ':') == 0)
+					dropped = exit_set(vctx, substr(e.key, length(id) + 1), '', '') || dropped;
 			if (dropped)
 				exit_sync();
 

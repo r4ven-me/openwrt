@@ -1,7 +1,7 @@
 #!/bin/sh
 # Routes the traffic of ocserv clients out through the tunnel of another connected client.
 #
-# State file /etc/ocserv/exit-clients, one entry per line: "<key> <source ipv4> <exit vhost id>/<exit CN>".
+# State file /etc/ocserv/exit-clients, one entry per line: "<key> <source ipv4> <exit client CN>".
 # "sync" builds one routing table per entry: default via the tunnel device of the exit client while
 # it is connected, otherwise "unreachable" (kill-switch: no leak through the default route).
 # "watch" runs "sync" whenever a network link appears or disappears (a client connects/disconnects).
@@ -11,36 +11,8 @@ PRIO=1500
 TABLE_BASE=3000
 COUNT=/var/run/ocserv-exit.count
 
-# prints the tunnel device of a connected client. $1 = vhost id ('' = default host), $2 = CN.
-# $users holds the output of "occtl --json show users".
-find_dev() {
-	local want="" domains i n u v
-	if [ -n "$1" ]; then
-		want=$(uci -q get "ocserv.$1.domain") || return 1
-	else
-		domains=$(uci -q show ocserv | sed -n "s/^ocserv\.[^.]*\.domain='\(.*\)'$/\1/p")
-	fi
-	n=$(jsonfilter -s "$users" -e '@[*].Username' 2>/dev/null | wc -l)
-	i=0
-	while [ "$i" -lt "$n" ]; do
-		u=$(jsonfilter -s "$users" -e "@[$i].Username" 2>/dev/null)
-		if [ "$u" = "$2" ]; then
-			v=$(jsonfilter -s "$users" -e "@[$i].Vhost" 2>/dev/null)
-			[ -n "$v" ] || v=$(jsonfilter -s "$users" -e "@[$i].VHost" 2>/dev/null)
-			if [ -n "$1" ]; then
-				[ "$v" = "$want" ] && { jsonfilter -s "$users" -e "@[$i].Device"; return 0; }
-			elif [ -z "$v" ] || ! printf '%s\n' "$domains" | grep -qxF "$v"; then
-				jsonfilter -s "$users" -e "@[$i].Device"
-				return 0
-			fi
-		fi
-		i=$((i + 1))
-	done
-	return 1
-}
-
 sync_rules() {
-	local prev=0 n=0 key ip cn vid dev users t
+	local prev=0 n=0 key ip cn dev users t
 
 	[ -f "$COUNT" ] && prev=$(cat "$COUNT")
 
@@ -54,12 +26,7 @@ sync_rules() {
 			[ -n "$ip" ] && [ -n "$cn" ] || continue
 			t=$((TABLE_BASE + n))
 			n=$((n + 1))
-			# "<vhost id>/<CN>"; without a slash the exit is in the vhost of the entry ("<id|->:<CN>")
-			case "$cn" in
-				*/*) vid=${cn%%/*}; cn=${cn#*/} ;;
-				*) vid=${key%%:*}; [ "$vid" = - ] && vid= ;;
-			esac
-			dev=$(find_dev "$vid" "$cn")
+			dev=$(jsonfilter -s "$users" -e "@[@.Username='$cn'].Device" 2>/dev/null | head -n1)
 
 			ip route flush table "$t" 2>/dev/null
 			if [ -n "$dev" ] && [ -d "/sys/class/net/$dev" ]; then
