@@ -172,18 +172,26 @@ return L.view.extend({
 			'value': n, 'selected': n == selected ? '' : null, 'disabled': this.pbr ? null : ''
 		}, n)));
 
-		const clients = (this.clients || []).filter(cn => cn != self);
-		if (selected && selected.indexOf('client:') == 0 && clients.indexOf(selected.substr(7)) < 0)
-			clients.push(selected.substr(7));
-		if (clients.length)
-			opts.push(E('optgroup', { 'label': _('Connected clients') }, clients.map(cn => E('option', {
-				'value': 'client:' + cn, 'selected': ('client:' + cn) == selected ? '' : null
-			}, cn))));
+		/* clients of every virtual host; the value is client:<vhost id>/<CN> (empty id = default host) */
+		const own = this.vhost || '';
+		const groups = {};
+		(this.clients || []).forEach(c => {
+			if (c.vhost == own && c.cn == self)
+				return;
+			(groups[c.vhost] = groups[c.vhost] || { label: c.vhost ? c.domain : _('Default host'), list: [] }).list.push(c);
+		});
+		Object.keys(groups).sort((a, b) => (a == own ? -1 : b == own ? 1 : a.localeCompare(b))).forEach(vid => {
+			const g = groups[vid];
+			opts.push(E('optgroup', { 'label': _('Clients: %s').format(g.label) }, g.list.map(c => {
+				const v = 'client:' + c.vhost + '/' + c.cn;
+				return E('option', { 'value': v, 'selected': v == selected ? '' : null }, c.cn);
+			})));
+		});
 		return E('select', { 'class': 'cbi-input-select' }, opts);
 	},
 
 	setClients(data) {
-		this.clients = (data.certs || []).filter(c => c.status == 'valid').map(c => c.cn);
+		this.clients = data.clients || [];
 	},
 
 	reload() {
