@@ -167,7 +167,7 @@ return L.view.extend({
 
 			if (spec.key == 'tcp-port') {
 				o = s.taboption('general', form.Flag, 'udp', _('Enable UDP'),
-					_('Enable UDP channel support; this must be enabled unless you know what you are doing'));
+					_('Enable UDP channel support; this must be enabled unless you know what you are doing. Without UDP the tunnel runs over TCP, so user traffic is TCP inside TCP: use BBR (net.ipv4.tcp_congestion_control=bbr; this package sets it on this router) on every other node of the chain too, i.e. on remote servers and on client machines, and reconnect the tunnels after changing it.'));
 				o.default = '1';
 			}
 		}

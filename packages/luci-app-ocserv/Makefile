@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-ocserv-r4ven-me
 LUCI_TITLE:=LuCI Support for OpenConnect VPN
-LUCI_DEPENDS:=+luci-base +ocserv +certtool +openssl-util
+LUCI_DEPENDS:=+luci-base +ocserv +certtool +openssl-util +kmod-tcp-bbr
 PKG_PROVIDES:=luci-app-ocserv
 
 PKG_LICENSE:=Apache-2.0
@@ -57,6 +57,12 @@ if [ -z "$${root}" ]; then
 	while ip rule del prio 1499 2>/dev/null; do :; done
 	while ip rule del prio 1500 2>/dev/null; do :; done
 	rm -f /etc/rc.d/*ocserv-exit /var/run/ocserv-exit.count
+fi
+
+# bbr for TCP-based tunnels: apply now (new connections only, see /etc/sysctl.d/12-bbr.conf).
+if [ -z "$${root}" ]; then
+	modprobe tcp_bbr >/dev/null 2>&1
+	sysctl -q -p /etc/sysctl.d/12-bbr.conf >/dev/null 2>&1
 fi
 
 grep -qxF '/etc/ocserv/' "$${root}/etc/sysupgrade.conf" 2>/dev/null || \

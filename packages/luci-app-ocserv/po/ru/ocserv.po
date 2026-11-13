@@ -106,10 +106,16 @@ msgstr "Включить UDP"
 #: applications/luci-app-ocserv/htdocs/luci-static/resources/view/ocserv/user-config.js:86
 msgid ""
 "Enable UDP channel support; this must be enabled unless you know what you "
-"are doing"
+"are doing. Without UDP the tunnel runs over TCP, so user traffic is TCP "
+"inside TCP: use BBR (net.ipv4.tcp_congestion_control=bbr; this package sets "
+"it on this router) on every other node of the chain too, i.e. on remote "
+"servers and on client machines, and reconnect the tunnels after changing it."
 msgstr ""
-"Включить поддержку UDP channel; опция должна быть включена только если вы "
-"знаете что делаете"
+"Включить поддержку канала UDP; её нужно включать, если вы не знаете, что делаете. "
+"Без UDP туннель идёт по TCP, и трафик пользователей оказывается TCP внутри TCP: "
+"используйте BBR (net.ipv4.tcp_congestion_control=bbr; этот пакет включает его на "
+"этом роутере) и на всех остальных узлах цепочки, то есть на удалённых серверах и "
+"клиентских машинах, и переподключите туннели после смены."
 
 #: applications/luci-app-ocserv/htdocs/luci-static/resources/view/ocserv/main.js:83
 #: applications/luci-app-ocserv/htdocs/luci-static/resources/view/ocserv/main.js:84

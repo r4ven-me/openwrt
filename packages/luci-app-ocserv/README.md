@@ -30,7 +30,11 @@ Measured on OpenWrt 25.12.6 (x86/64, kernel 6.12.112), 2026-11-13:
 
 ### What to do
 
-On the router (OpenWrt has no `sch_fq`, so keep the default `fq_codel`; bbr works without `fq`):
+**On the router this package does it for you:** it depends on `kmod-tcp-bbr`, ships
+`/etc/sysctl.d/12-bbr.conf` and applies it on install. The Server page in LuCI reminds you to do the same on the
+other nodes. Running tunnels still need a reconnect (see below).
+
+Manually, on a router without this package (OpenWrt has no `sch_fq`, so keep the default `fq_codel`; bbr works without `fq`):
 
 ```sh
 apk add kmod-tcp-bbr
