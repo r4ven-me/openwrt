@@ -23,6 +23,9 @@ const document = {
 	createElement(t) { if (!t) throw new Error("createElement('') is not a valid element"); return new N(t); },
 	createDocumentFragment() { return new N('#frag'); },
 	createTextNode(t) { const n = new N('#text'); n.text = t; return n; },
+	head: new N('head'),
+	/* finds an element appended to <head> by id (loadStyles() adds the stylesheet link there) */
+	getElementById(id) { return this.head.children.find(c => c.attrs && c.attrs.id === id) || null; },
 	activeElement: null
 };
 const dom = {
@@ -71,7 +74,7 @@ const ui = {
 	addNotification(t, n, level) { ui.notes.push(level); }, notes: [], showModal(title, body) { ui.lastModal = body; }, hideModal() {}
 };
 const qrcode = { make: () => '<svg/>' };
-const L = { view: { extend: o => o }, resolveDefault: p => p };
+const L = { view: { extend: o => o }, resolveDefault: p => p, resource: p => '/luci-static/resources/' + p };
 
 /* evaluates a LuCI module: strips the 'require' lines and injects the required modules as parameters */
 function load(file, deps, res = RES) {
@@ -80,7 +83,7 @@ function load(file, deps, res = RES) {
 	return new Function(...names, src)(...names.map(n => deps[n]));
 }
 
-const awg = load('amneziawg/common.js', { baseclass, rpc, ui });
+const awg = load('amneziawg/common.js', { baseclass, rpc, ui, L });
 const base = { baseclass, rpc, ui, L, poll: { add() {} }, qrcode, awg };
 
 const peers = [
@@ -123,7 +126,7 @@ for (const [file, label, data] of cases) {
 /* button handlers: the arguments that reach the backend */
 const calls = [];
 for (const m of Object.keys(awg)) {
-	if (typeof awg[m] === 'function' && !['row','input','actions','button','notify','handle','fmtBytes','fmtHandshake','ip4ToInt','obfLabels'].includes(m))
+	if (typeof awg[m] === 'function' && !['row','input','actions','button','notify','handle','fmtBytes','fmtHandshake','ip4ToInt','obfLabels','serviceRow','loadStyles'].includes(m))
 		awg[m] = (...a) => { calls.push([ m, a ]); return Promise.resolve({ ok: true, obf: {} }); };
 }
 awg.handle = (p) => p;
