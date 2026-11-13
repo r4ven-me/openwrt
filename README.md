@@ -45,7 +45,7 @@ chain nodes and restart of `oc*` interfaces after the sysctl change. Speed diffe
 ## Layout
 
 - `packages/` - package sources, one directory per package
-- `build/` - Dockerfiles and scripts that build the packages in the OpenWrt SDK and publish the repo
+- `build/` - Dockerfiles and scripts that build the packages in the OpenWrt SDK and publish the repo; `build/gen-index.py` + `build/site/` make the landing page (package list with download links) of apk.r4ven.me
 - `tests/` - LuCI view render tests (`node tests/view-render.js`)
 - `keys/` - public apk signing key (the private key lives only in KeePassXC)
 

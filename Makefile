@@ -38,7 +38,7 @@ publish:
 	mkdir -p repo-out/$(RELEASE)/$(ARCH)
 	@$(call with_signing_key,docker run --rm -v $(CURDIR)/dist:/dist:ro -v $(CURDIR)/dist-awg:/dist-awg:ro -v $(CURDIR)/build/publish.sh:/publish.sh:ro -v "$$tmp":/keys:ro -v $(CURDIR)/repo-out/$(RELEASE)/$(ARCH):/out $(IMAGE) /publish.sh)
 
-# Pushes repo-out/ + build/gh-pages-README.md + build/CNAME (custom domain) + the public key to the gh-pages branch of REMOTE
+# Pushes repo-out/ + the landing page (build/gen-index.py, build/site/) + build/gh-pages-README.md + build/CNAME (custom domain) + the public key to the gh-pages branch of REMOTE
 REMOTE ?= git@github.com:r4ven-me/openwrt.git
 
 publish-push:
@@ -51,7 +51,8 @@ publish-push:
 	fi; \
 	rm -rf "$$tmp/w/$(RELEASE)/$(ARCH)"; mkdir -p "$$tmp/w/$(RELEASE)"; \
 	cp -r repo-out/$(RELEASE)/$(ARCH) "$$tmp/w/$(RELEASE)/"; \
-	cp build/gh-pages-README.md build/CNAME keys/r4ven-apk.pub "$$tmp/w/"; touch "$$tmp/w/.nojekyll"; \
+	cp build/gh-pages-README.md build/CNAME keys/r4ven-apk.pub build/site/logo.jpg build/site/favicon.svg "$$tmp/w/"; touch "$$tmp/w/.nojekyll"; \
+	python3 build/gen-index.py repo-out/$(RELEASE)/$(ARCH) "$$tmp/w/index.html" $(RELEASE) $(ARCH); \
 	git -C "$$tmp/w" add -A; \
 	git -C "$$tmp/w" commit -q -m "Publish $(RELEASE)/$(ARCH)"; \
 	git -C "$$tmp/w" push origin gh-pages
