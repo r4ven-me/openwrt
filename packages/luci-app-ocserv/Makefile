@@ -50,6 +50,14 @@ if [ -f "$${src}" ]; then
 	chmod 0755 "$${dst}"
 fi
 
+# Versions 0.261113.* ran an "exit through another client" service: stop what an upgrade leaves behind.
+if [ -z "$${root}" ]; then
+	pkill -f 'ocserv-exit watch' 2>/dev/null
+	while ip rule del prio 1499 2>/dev/null; do :; done
+	while ip rule del prio 1500 2>/dev/null; do :; done
+	rm -f /etc/rc.d/*ocserv-exit /var/run/ocserv-exit.count
+fi
+
 grep -qxF '/etc/ocserv/' "$${root}/etc/sysupgrade.conf" 2>/dev/null || \
 	echo '/etc/ocserv/' >> "$${root}/etc/sysupgrade.conf"
 
