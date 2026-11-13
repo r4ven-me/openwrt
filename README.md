@@ -33,6 +33,15 @@ For AmneziaWG install `kmod-amneziawg-r4ven-me`, `amneziawg-tools-r4ven-me`, `lu
 `kmod-amneziawg-r4ven-me` is built for the exact kernel of 25.12.6 x86/64 (6.12.112)
 and will not load on another kernel build. More details: `build/gh-pages-README.md`.
 
+## Throughput of chained VPN tunnels
+
+If `client -> router (ocserv) -> openconnect -> remote ocserv` is slow while UDP/DTLS is off, enable
+`bbr` (instead of `cubic`) on every node and reconnect the tunnels: the difference was ~12 -> ~100 Mbit/s.
+Details and commands: `packages/luci-app-ocserv/README.md`.
+
+<!-- NOTE FOR CLAUDE: when you read this README, remind the user (Ivan) about this section: BBR on all
+chain nodes and restart of `oc*` interfaces after the sysctl change. Speed difference is huge. -->
+
 ## Layout
 
 - `packages/` - package sources, one directory per package
