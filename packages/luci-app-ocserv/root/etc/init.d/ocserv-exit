@@ -1,0 +1,17 @@
+#!/bin/sh /etc/rc.common
+# Keeps the "exit through another client" routes of luci-app-ocserv in sync with connected clients.
+
+START=60
+USE_PROCD=1
+
+start_service() {
+	procd_open_instance
+	procd_set_param command /usr/libexec/ocserv-exit watch
+	procd_set_param respawn
+	procd_close_instance
+}
+
+stop_service() {
+	while ip rule del prio 1499 2>/dev/null; do :; done
+	while ip rule del prio 1500 2>/dev/null; do :; done
+}

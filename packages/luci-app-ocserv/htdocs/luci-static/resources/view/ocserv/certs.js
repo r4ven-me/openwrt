@@ -162,13 +162,28 @@ return L.view.extend({
 		});
 	},
 
-	viaSelectEl(selected) {
+	/* self: the name of the user the select belongs to (a client cannot exit through itself) */
+	viaSelectEl(selected, self) {
 		const opts = [ E('option', { 'value': '' }, _('Default route')) ];
 		const names = this.ifaces.slice();
-		if (selected && names.indexOf(selected) < 0)
+		if (selected && selected.indexOf('client:') != 0 && names.indexOf(selected) < 0)
 			names.push(selected);
-		names.forEach(n => opts.push(E('option', { 'value': n, 'selected': n == selected ? '' : null }, n)));
-		return E('select', { 'class': 'cbi-input-select', 'disabled': this.pbr ? null : '' }, opts);
+		names.forEach(n => opts.push(E('option', {
+			'value': n, 'selected': n == selected ? '' : null, 'disabled': this.pbr ? null : ''
+		}, n)));
+
+		const clients = (this.clients || []).filter(cn => cn != self);
+		if (selected && selected.indexOf('client:') == 0 && clients.indexOf(selected.substr(7)) < 0)
+			clients.push(selected.substr(7));
+		if (clients.length)
+			opts.push(E('optgroup', { 'label': _('Connected clients') }, clients.map(cn => E('option', {
+				'value': 'client:' + cn, 'selected': ('client:' + cn) == selected ? '' : null
+			}, cn))));
+		return E('select', { 'class': 'cbi-input-select' }, opts);
+	},
+
+	setClients(data) {
+		this.clients = (data.certs || []).filter(c => c.status == 'valid').map(c => c.cn);
 	},
 
 	reload() {
@@ -176,6 +191,7 @@ return L.view.extend({
 			this.showError(data);
 			this.ifaces = data.ifaces || [];
 			this.pbr = data.pbr !== false;
+			this.setClients(data);
 			this.fillTable(data);
 		});
 	},
@@ -193,8 +209,8 @@ return L.view.extend({
 		const rows = certs.map(c => {
 			const valid = c.status == 'valid';
 			const ip = E('input', { 'type': 'text', 'class': 'cbi-input-text ocserv-ip', 'value': c.ip, 'disabled': valid ? null : '' });
-			const via = this.viaSelectEl(c.via);
-			via.disabled = !valid || !this.pbr;
+			const via = this.viaSelectEl(c.via, c.cn);
+			via.disabled = !valid;
 			const dl = (kind, label, has) => has ? E('button', {
 				'class': 'cbi-button cbi-button-action',
 				'click': ui.createHandlerFn(this, 'handleDownload', c, kind)
@@ -241,6 +257,7 @@ return L.view.extend({
 	render(data) {
 		this.ifaces = data.ifaces || [];
 		this.pbr = data.pbr !== false;
+		this.setClients(data);
 		this.cnInput = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': 'alice' });
 		this.daysInput = E('input', { 'type': 'number', 'class': 'cbi-input-text', 'value': 365, 'min': 1 });
 		this.pwInput = E('input', { 'type': 'password', 'class': 'cbi-input-password', 'autocomplete': 'new-password' });
@@ -259,7 +276,7 @@ return L.view.extend({
 			this.renderVhostSelector(),
 			this.errorBox,
 			data.pbr === false ? E('div', { 'class': 'alert-message warning' },
-				_('The pbr package is not installed: the exit interface cannot be chosen.')) : '',
+				_('The pbr package is not installed: only another client can be chosen as the exit.')) : '',
 			data.ca === false ? E('div', { 'class': 'alert-message warning' },
 				_('The CA certificate was not found in /etc/ocserv. Start the ocserv service once so that it is created.')) : '',
 

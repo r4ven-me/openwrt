@@ -15,6 +15,9 @@ const OCDIR = '/etc/ocserv';
 const VHOSTDIR = OCDIR + '/vhosts';
 const ZONE = 'ocserv';
 const POLICY_PREFIX = 'ocserv_';
+const EXITFILE = OCDIR + '/exit-clients';
+const EXITBIN = '/usr/libexec/ocserv-exit';
+const CLIENT_VIA = 'client:';
 const LOCAL = OCDIR + '/ocserv.conf.local';
 const TEMPLATE = OCDIR + '/ocserv.conf.template';
 const MARK_BEGIN = '# BEGIN luci-app-ocserv';
@@ -287,8 +290,57 @@ function policy_of(c, ctx, cn) {
 	return found;
 }
 
-/* exit interface of a user (from its pbr policy), '' for the default route */
+function exit_key(ctx, cn) {
+	return (ctx.id ? ctx.id : '-') + ':' + cn;
+}
+
+/* "exit through another client" entries: [ { key, ip, exit } ] */
+function exit_read() {
+	let res = [];
+	for (let line in split(fs.readfile(EXITFILE) ?? '', '\n')) {
+		let f = split(trim(line), ' ');
+		if (length(f) == 3)
+			push(res, { key: f[0], ip: f[1], exit: f[2] });
+	}
+	return res;
+}
+
+/* sets the client exit of a user; exit_cn == '' removes it. Returns true if the file changed. */
+function exit_set(ctx, cn, ip, exit_cn) {
+	let key = exit_key(ctx, cn), old = exit_read(), out = [];
+	for (let e in old)
+		if (e.key != key)
+			push(out, e);
+	if (exit_cn)
+		push(out, { key, ip, exit: exit_cn });
+
+	let text = join('', map(out, e => e.key + ' ' + e.ip + ' ' + e.exit + '\n'));
+	if (text == (fs.readfile(EXITFILE) ?? ''))
+		return false;
+	if (!length(out))
+		fs.unlink(EXITFILE);
+	else
+		fs.writefile(EXITFILE, text);
+	return true;
+}
+
+function exit_sync() {
+	if (fs.access(EXITBIN))
+		system([ EXITBIN, 'sync' ], 20000);
+}
+
+function valid_via(via) {
+	return type(via) == 'string' &&
+		(match(via, /^[A-Za-z0-9_]+$/) != null ||
+		 (index(via, CLIENT_VIA) == 0 && valid_cn(substr(via, length(CLIENT_VIA)))));
+}
+
+/* exit of a user: an interface name (from its pbr policy), "client:<CN>", or '' for the default route */
 function via_of(c, ctx, cn) {
+	let key = exit_key(ctx, cn);
+	for (let e in exit_read())
+		if (e.key == key)
+			return CLIENT_VIA + e.exit;
 	let pol = policy_of(c, ctx, cn);
 	return pol ? (c.get('pbr', pol, 'interface') ?? '') : '';
 }
@@ -369,8 +421,28 @@ function ensure_zone(c, via) {
 
 /* via = '' removes the policy (the user goes out through the default route) */
 function apply_route(ctx, cn, ip, via) {
-	if (via && !match(via, /^[A-Za-z0-9_]+$/))
+	if (via && !valid_via(via))
 		return { error: 'Invalid interface' };
+
+	let exit_cn = '';
+	if (via && index(via, CLIENT_VIA) == 0) {
+		exit_cn = substr(via, length(CLIENT_VIA));
+		if (exit_cn == cn)
+			return { error: 'A client cannot exit through itself' };
+		let found = false;
+		for (let e in read_index(ctx))
+			if (e.cn == exit_cn && e.status == 'valid')
+				found = true;
+		if (!found)
+			return { error: 'No valid certificate for the exit client' };
+		/* a chain A -> B -> A would loop the traffic */
+		for (let e in exit_read())
+			if (e.key == exit_key(ctx, exit_cn) && e.exit == cn)
+				return { error: 'The exit client already exits through this client' };
+		via = '';
+	}
+	let was_client = exit_set(ctx, cn, ip, exit_cn);
+
 	if (via && !fs.access('/etc/init.d/pbr'))
 		return { error: 'The pbr package is not installed' };
 
@@ -397,6 +469,8 @@ function apply_route(ctx, cn, ip, via) {
 	}
 	c.commit('pbr');
 	reload_pbr();
+	if (was_client || exit_cn)
+		exit_sync();
 	return exit.warning ? { ok: true, warning: exit.warning } : { ok: true };
 }
 
@@ -481,7 +555,7 @@ const methods = {
 			if (type(pw) != 'string' || length(pw) < 1)
 				return { error: 'PKCS#12 password must not be empty' };
 
-			if (via && !match(via, /^[A-Za-z0-9_]+$/))
+			if (via && !valid_via(via))
 				return { error: 'Invalid interface' };
 
 			let err = ensure_pki(ctx);
@@ -704,6 +778,14 @@ const methods = {
 					reload_pbr();
 				}
 			}
+
+			/* and its "exit through another client" entries */
+			let dropped = false;
+			for (let e in exit_read())
+				if (index(e.key, id + ':') == 0)
+					dropped = exit_set(vctx, substr(e.key, length(id) + 1), '', '') || dropped;
+			if (dropped)
+				exit_sync();
 
 			for (let sid in users)
 				c.delete('ocserv', sid);
