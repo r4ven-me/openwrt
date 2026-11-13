@@ -22,6 +22,46 @@ DESCRIPTIONS = {
 ORDER = list(DESCRIPTIONS)
 
 
+import re as _re
+
+SETUP = """wget -O /etc/apk/keys/r4ven-apk.pub https://apk.r4ven.me/r4ven-apk.pub
+echo https://apk.r4ven.me/{release}/{arch}/packages.adb > /etc/apk/repositories.d/r4ven.list
+apk update
+apk add luci-app-ocserv-r4ven-me"""
+
+_BUILTINS = {'echo', 'cd', 'export', 'source', 'exit', 'set', 'unset', 'read', 'test'}
+_TOKEN = _re.compile(r"(&&|\|\||[|;<>])|(\"[^\"]*\"|'[^']*')|(#.*$)|(\S+)|(\s+)")
+
+
+def highlight_bash(text):
+    """Bash highlighting with the same token classes as Chroma (the maintainer's Hugo sites): the CSS variables
+    --chroma-* below carry the Nord colors. Only what the Chroma bash lexer colors: builtins (nb), operators (o),
+    strings (s), comments (c1); commands and arguments stay plain."""
+    out_lines = []
+    for line in text.split('\n'):
+        out, first = [], True
+        for m in _TOKEN.finditer(line):
+            op, string, comment, word, space = m.groups()
+            if op:
+                out.append(f'<span class="o">{html.escape(op)}</span>')
+                first = op in ('&&', '||', '|', ';')
+            elif string:
+                out.append(f'<span class="s">{html.escape(string)}</span>')
+                first = False
+            elif comment:
+                out.append(f'<span class="c1">{html.escape(comment)}</span>')
+            elif word:
+                if first and word in _BUILTINS:
+                    out.append(f'<span class="nb">{html.escape(word)}</span>')
+                else:
+                    out.append(html.escape(word))
+                first = False
+            else:
+                out.append(space)
+        out_lines.append('<span class="line">' + ''.join(out) + '</span>')
+    return '\n'.join(out_lines)
+
+
 def human(n):
     """Size as a two-language span: the unit depends on the page language."""
     units = (('Б', 'B'), ('КБ', 'KB'), ('МБ', 'MB'))
@@ -54,7 +94,8 @@ def main():
             f'<span class="pkg-meta">{html.escape(ver)} · {human(size)}</span></li>'
         )
 
-    page = TEMPLATE.replace('{{PACKAGES}}', '\n'.join(rows)).replace('{{RELEASE}}', release).replace('{{ARCH}}', arch)
+    code = highlight_bash(SETUP.format(release=release, arch=arch))
+    page = TEMPLATE.replace('{{CODE}}', code).replace('{{PACKAGES}}', '\n'.join(rows)).replace('{{RELEASE}}', release).replace('{{ARCH}}', arch)
     with open(out, 'w', encoding='utf-8') as fh:
         fh.write(page)
     print(f'{out}: {len(pkgs)} packages')
@@ -81,9 +122,9 @@ TEMPLATE = '''<!doctype html>
 })();
 </script>
 <style>
-:root{--primary:oklch(0.594 0.077 254.027);--bg:oklch(0.951 0.007 260.731);--fg:oklch(0.324 0.022 264.182);--muted:oklch(0.933 0.01 261.788);--muted-fg:oklch(0.452 0.035 264.131);--border:oklch(0.899 0.016 262.749);--card:oklch(0.951 0.007 260.731)}
-:root[data-mode=dark]{--primary:oklch(0.65 0.07 254.027);--bg:oklch(0.18 0.015 264.182);--fg:oklch(0.899 0.016 262.749);--muted:oklch(0.25 0.02 264.131);--muted-fg:oklch(0.70 0.035 264.131);--border:oklch(0.35 0.025 264.182);--card:oklch(0.22 0.018 264.182)}
-@media (prefers-color-scheme:dark){:root:not([data-mode]){--primary:oklch(0.65 0.07 254.027);--bg:oklch(0.18 0.015 264.182);--fg:oklch(0.899 0.016 262.749);--muted:oklch(0.25 0.02 264.131);--muted-fg:oklch(0.70 0.035 264.131);--border:oklch(0.35 0.025 264.182);--card:oklch(0.22 0.018 264.182)}}
+:root{--primary:oklch(0.594 0.077 254.027);--bg:oklch(0.951 0.007 260.731);--fg:oklch(0.324 0.022 264.182);--muted:oklch(0.933 0.01 261.788);--muted-fg:oklch(0.452 0.035 264.131);--border:oklch(0.899 0.016 262.749);--card:oklch(0.951 0.007 260.731);--chroma-bg:#eceff4;--chroma-text:#2e3440;--chroma-nb:#5e81ac;--chroma-o:#5e81ac;--chroma-s:#a3be8c;--chroma-c:#4c566a}
+:root[data-mode=dark]{--primary:oklch(0.65 0.07 254.027);--bg:oklch(0.18 0.015 264.182);--fg:oklch(0.899 0.016 262.749);--muted:oklch(0.25 0.02 264.131);--muted-fg:oklch(0.70 0.035 264.131);--border:oklch(0.35 0.025 264.182);--card:oklch(0.22 0.018 264.182);--chroma-bg:#2e3440;--chroma-text:#d8dee9;--chroma-nb:#81a1c1;--chroma-o:#81a1c1;--chroma-s:#a3be8c;--chroma-c:#616e87}
+@media (prefers-color-scheme:dark){:root:not([data-mode]){--primary:oklch(0.65 0.07 254.027);--bg:oklch(0.18 0.015 264.182);--fg:oklch(0.899 0.016 262.749);--muted:oklch(0.25 0.02 264.131);--muted-fg:oklch(0.70 0.035 264.131);--border:oklch(0.35 0.025 264.182);--card:oklch(0.22 0.018 264.182);--chroma-bg:#2e3440;--chroma-text:#d8dee9;--chroma-nb:#81a1c1;--chroma-o:#81a1c1;--chroma-s:#a3be8c;--chroma-c:#616e87}}
 html[lang=en] [data-ru],html[lang=ru] [data-en]{display:none}
 html[data-mode=dark] .i-sun,html:not([data-mode=dark]) .i-moon{display:none}
 *{box-sizing:border-box}
@@ -101,7 +142,9 @@ h1{font-size:1.75rem;margin:1.5rem 0 .25rem}
 h2{font-size:1.125rem;margin:2rem 0 .75rem}
 .lead{margin:0;color:var(--muted-fg)}
 a{color:var(--primary)}
-pre{margin:0;padding:1rem 1.25rem;overflow-x:auto;border:1px solid var(--border);border-radius:.75rem;background:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.875rem;line-height:1.7}
+pre{margin:0;padding:1rem 1.25rem;overflow-x:auto;border:1px solid var(--border);border-radius:.75rem;background:var(--chroma-bg);color:var(--chroma-text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.875rem;line-height:1.7}
+pre code{font:inherit}
+.chroma .nb{color:var(--chroma-nb)}.chroma .o{color:var(--chroma-o)}.chroma .s{color:var(--chroma-s)}.chroma .c1{color:var(--chroma-c)}
 ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.75rem}
 .pkg{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 1.25rem;border:1px solid var(--border);border-radius:.75rem;background:var(--card);transition:transform .2s ease-out,border-color .2s ease-out}
 .pkg:hover{transform:translateY(-2px);border-color:var(--primary)}
@@ -135,10 +178,7 @@ footer{margin:2.5rem 0 2rem;font-size:.875rem;color:var(--muted-fg)}
 <p class="lead"><span data-ru>OpenWrt {{RELEASE}}, архитектура {{ARCH}}. Все пакеты подписаны ключом</span><span data-en>OpenWrt {{RELEASE}}, architecture {{ARCH}}. All packages are signed with the key</span> <a href="r4ven-apk.pub">r4ven-apk</a>.</p>
 
 <h2><span data-ru>Подключение</span><span data-en>Setup</span></h2>
-<pre>wget -O /etc/apk/keys/r4ven-apk.pub https://apk.r4ven.me/r4ven-apk.pub
-echo https://apk.r4ven.me/{{RELEASE}}/{{ARCH}}/packages.adb &gt; /etc/apk/repositories.d/r4ven.list
-apk update
-apk add luci-app-ocserv-r4ven-me</pre>
+<pre class="chroma"><code class="language-bash" data-lang="bash">{{CODE}}</code></pre>
 
 <h2><span data-ru>Пакеты</span><span data-en>Packages</span></h2>
 <ul>
