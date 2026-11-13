@@ -105,7 +105,7 @@ return L.view.extend({
 				E('td', { 'class': 'td' }, vhost.domain || id),
 				E('td', { 'class': 'td' }, vhost.enabled == '0' ? _('No') : _('Yes')),
 				E('td', { 'class': 'td' }, vhost.auth || 'plain'),
-				E('td', { 'class': 'td cbi-section-actions' }, [
+				E('td', { 'class': 'td ocserv-actions' }, [
 					E('a', {
 						'class': 'cbi-button cbi-button-edit',
 						'href': editUrl(id)
@@ -119,6 +119,8 @@ return L.view.extend({
 			]);
 		});
 
+		base.loadStyles();
+
 		if (!rows.length)
 			rows.push(E('tr', { 'class': 'tr placeholder' }, E('td', {
 				'class': 'td',
@@ -130,12 +132,12 @@ return L.view.extend({
 			E('div', { 'class': 'cbi-map-descr' },
 				_('Configure domain-specific ocserv settings and certificates.')),
 			E('div', { 'class': 'cbi-section' }, [
-				E('table', { 'class': 'table' }, [
+				E('table', { 'class': 'table ocserv-table' }, [
 					E('tr', { 'class': 'tr table-titles' }, [
 						E('th', { 'class': 'th' }, _('Domain')),
 						E('th', { 'class': 'th' }, _('Enabled')),
 						E('th', { 'class': 'th' }, _('Authentication')),
-						E('th', { 'class': 'th cbi-section-actions' }, '')
+						E('th', { 'class': 'th ocserv-actions' }, '')
 					]),
 					...rows
 				]),
