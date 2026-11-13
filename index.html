@@ -19,9 +19,9 @@
 })();
 </script>
 <style>
-:root{--primary:oklch(0.594 0.077 254.027);--bg:oklch(0.951 0.007 260.731);--fg:oklch(0.324 0.022 264.182);--muted:oklch(0.933 0.01 261.788);--muted-fg:oklch(0.452 0.035 264.131);--border:oklch(0.899 0.016 262.749);--card:oklch(0.951 0.007 260.731)}
-:root[data-mode=dark]{--primary:oklch(0.65 0.07 254.027);--bg:oklch(0.18 0.015 264.182);--fg:oklch(0.899 0.016 262.749);--muted:oklch(0.25 0.02 264.131);--muted-fg:oklch(0.70 0.035 264.131);--border:oklch(0.35 0.025 264.182);--card:oklch(0.22 0.018 264.182)}
-@media (prefers-color-scheme:dark){:root:not([data-mode]){--primary:oklch(0.65 0.07 254.027);--bg:oklch(0.18 0.015 264.182);--fg:oklch(0.899 0.016 262.749);--muted:oklch(0.25 0.02 264.131);--muted-fg:oklch(0.70 0.035 264.131);--border:oklch(0.35 0.025 264.182);--card:oklch(0.22 0.018 264.182)}}
+:root{--primary:oklch(0.594 0.077 254.027);--bg:oklch(0.951 0.007 260.731);--fg:oklch(0.324 0.022 264.182);--muted:oklch(0.933 0.01 261.788);--muted-fg:oklch(0.452 0.035 264.131);--border:oklch(0.899 0.016 262.749);--card:oklch(0.951 0.007 260.731);--chroma-bg:#eceff4;--chroma-text:#2e3440;--chroma-nb:#5e81ac;--chroma-o:#5e81ac;--chroma-s:#a3be8c;--chroma-c:#4c566a}
+:root[data-mode=dark]{--primary:oklch(0.65 0.07 254.027);--bg:oklch(0.18 0.015 264.182);--fg:oklch(0.899 0.016 262.749);--muted:oklch(0.25 0.02 264.131);--muted-fg:oklch(0.70 0.035 264.131);--border:oklch(0.35 0.025 264.182);--card:oklch(0.22 0.018 264.182);--chroma-bg:#2e3440;--chroma-text:#d8dee9;--chroma-nb:#81a1c1;--chroma-o:#81a1c1;--chroma-s:#a3be8c;--chroma-c:#616e87}
+@media (prefers-color-scheme:dark){:root:not([data-mode]){--primary:oklch(0.65 0.07 254.027);--bg:oklch(0.18 0.015 264.182);--fg:oklch(0.899 0.016 262.749);--muted:oklch(0.25 0.02 264.131);--muted-fg:oklch(0.70 0.035 264.131);--border:oklch(0.35 0.025 264.182);--card:oklch(0.22 0.018 264.182);--chroma-bg:#2e3440;--chroma-text:#d8dee9;--chroma-nb:#81a1c1;--chroma-o:#81a1c1;--chroma-s:#a3be8c;--chroma-c:#616e87}}
 html[lang=en] [data-ru],html[lang=ru] [data-en]{display:none}
 html[data-mode=dark] .i-sun,html:not([data-mode=dark]) .i-moon{display:none}
 *{box-sizing:border-box}
@@ -39,7 +39,9 @@ h1{font-size:1.75rem;margin:1.5rem 0 .25rem}
 h2{font-size:1.125rem;margin:2rem 0 .75rem}
 .lead{margin:0;color:var(--muted-fg)}
 a{color:var(--primary)}
-pre{margin:0;padding:1rem 1.25rem;overflow-x:auto;border:1px solid var(--border);border-radius:.75rem;background:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.875rem;line-height:1.7}
+pre{margin:0;padding:1rem 1.25rem;overflow-x:auto;border:1px solid var(--border);border-radius:.75rem;background:var(--chroma-bg);color:var(--chroma-text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.875rem;line-height:1.7}
+pre code{font:inherit}
+.chroma .nb{color:var(--chroma-nb)}.chroma .o{color:var(--chroma-o)}.chroma .s{color:var(--chroma-s)}.chroma .c1{color:var(--chroma-c)}
 ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.75rem}
 .pkg{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 1.25rem;border:1px solid var(--border);border-radius:.75rem;background:var(--card);transition:transform .2s ease-out,border-color .2s ease-out}
 .pkg:hover{transform:translateY(-2px);border-color:var(--primary)}
@@ -73,10 +75,10 @@ footer{margin:2.5rem 0 2rem;font-size:.875rem;color:var(--muted-fg)}
 <p class="lead"><span data-ru>OpenWrt 25.12, архитектура x86_64. Все пакеты подписаны ключом</span><span data-en>OpenWrt 25.12, architecture x86_64. All packages are signed with the key</span> <a href="r4ven-apk.pub">r4ven-apk</a>.</p>
 
 <h2><span data-ru>Подключение</span><span data-en>Setup</span></h2>
-<pre>wget -O /etc/apk/keys/r4ven-apk.pub https://apk.r4ven.me/r4ven-apk.pub
-echo https://apk.r4ven.me/25.12/x86_64/packages.adb &gt; /etc/apk/repositories.d/r4ven.list
-apk update
-apk add luci-app-ocserv-r4ven-me</pre>
+<pre class="chroma"><code class="language-bash" data-lang="bash"><span class="line">wget -O /etc/apk/keys/r4ven-apk.pub https://apk.r4ven.me/r4ven-apk.pub</span>
+<span class="line"><span class="nb">echo</span> https://apk.r4ven.me/25.12/x86_64/packages.adb <span class="o">&gt;</span> /etc/apk/repositories.d/r4ven.list</span>
+<span class="line">apk update</span>
+<span class="line">apk add luci-app-ocserv-r4ven-me</span></code></pre>
 
 <h2><span data-ru>Пакеты</span><span data-en>Packages</span></h2>
 <ul>
