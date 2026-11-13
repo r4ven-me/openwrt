@@ -19,6 +19,13 @@ const callRcInit = rpc.declare({
 	params: [ 'name', 'action' ]
 });
 
+const callRcList = rpc.declare({
+	object: 'rc',
+	method: 'list',
+	params: [ 'name' ],
+	expect: { '': {} }
+});
+
 const callUciCommit = rpc.declare({
 	object: 'uci',
 	method: 'commit',
@@ -109,6 +116,51 @@ function withTimeout(promise, ms, message) {
 return baseclass.extend({
 	addConfOption,
 	withTimeout,
+
+	/* "Service Control" row like on the pbr page: Start / Restart / Stop and Enable / Disable (start
+	   on boot) of the ocserv init script. Restart and Stop drop every VPN session, including the
+	   one the administrator may be using, so they ask first. */
+	serviceControl() {
+		const box = E('div', { 'class': 'cbi-value-field' });
+		const row = E('div', { 'class': 'cbi-value' }, [ E('label', { 'class': 'cbi-value-title' }, _('Service Control')), box ]);
+
+		const draw = (st) => {
+			const btn = (action, label, cls, off, warn) => E('button', {
+				'class': 'btn cbi-button ' + cls,
+				'disabled': off ? '' : null,
+				'click': ui.createHandlerFn(this, () => {
+					if (warn && !confirm(warn))
+						return;
+					return run(action);
+				})
+			}, label);
+
+			box.replaceChildren(
+				btn('start', _('Start'), 'cbi-button-positive', st.running),
+				' ', btn('restart', _('Restart'), 'cbi-button-action', !st.running,
+					_('Restart ocserv? All VPN sessions are dropped; if you reach LuCI through this VPN, reconnect afterwards.')),
+				' ', btn('stop', _('Stop'), 'cbi-button-negative', !st.running,
+					_('Stop ocserv? All VPN sessions are dropped; if you reach LuCI through this VPN, you cannot start it again from here.')),
+				E('span', { 'style': 'display:inline-block;width:2em' }),
+				btn('enable', _('Enable'), 'cbi-button-neutral', st.enabled),
+				' ', btn('disable', _('Disable'), 'cbi-button-negative', !st.enabled));
+		};
+
+		const refresh = () => callRcList('ocserv').then(res => {
+			const st = res.ocserv || {};
+			draw({ running: !!st.running, enabled: !!st.enabled });
+		}, () => draw({ running: false, enabled: false }));
+
+		const run = (action) => withTimeout(callRcInit('ocserv', action), 20000, _('The service did not answer in time.'))
+			.then(() => ui.addNotification(null, E('p', _('Done: %s.').format(action)), 'info'),
+				/* the answer never arrives when the session ran through the stopped service */
+				() => ui.addNotification(null, E('p', _('No answer from the router. If you are connected through this VPN, reconnect, then reload the page.')), 'warning'))
+			.then(() => new Promise(r => setTimeout(r, 1500)))
+			.then(refresh);
+
+		refresh();
+		return row;
+	},
 
 	/* Shared table styles, loaded once per page */
 	loadStyles() {

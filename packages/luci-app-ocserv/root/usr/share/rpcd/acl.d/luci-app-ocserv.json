@@ -64,7 +64,8 @@
 					"exec"
 				],
 				"rc": [
-					"init"
+					"init",
+					"list"
 				],
 				"luci.ocserv-pki": [
 					"list"
@@ -95,7 +96,8 @@
 					"exec"
 				],
 				"rc": [
-					"init"
+					"init",
+					"list"
 				],
 				"luci.ocserv-pki": [
 					"issue",

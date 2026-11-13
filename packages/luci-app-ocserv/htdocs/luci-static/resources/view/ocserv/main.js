@@ -198,7 +198,7 @@ return L.view.extend({
 		o.remove = function() { return false; };
 		o.write = function() { return false; };
 
-		return m.render();
+		return m.render().then(node => E([ node, E('div', { 'class': 'cbi-section' }, base.serviceControl()) ]));
 	},
 
 	handleSave(ev) {
