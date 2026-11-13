@@ -329,10 +329,6 @@ function exit_sync() {
 		system([ EXITBIN, 'sync' ], 20000);
 }
 
-function valid_cn(cn) {
-	return type(cn) == 'string' && length(cn) <= 64 && match(cn, /^[A-Za-z0-9._-]+$/) != null;
-}
-
 function valid_via(via) {
 	return type(via) == 'string' &&
 		(match(via, /^[A-Za-z0-9_]+$/) != null ||
@@ -423,37 +419,6 @@ function ensure_zone(c, via) {
 	return { warning };
 }
 
-function read_index(ctx) {
-	let res = [];
-	let data = fs.readfile(ctx.pki + '/index.txt');
-	if (!data)
-		return res;
-
-	let c = cursor();
-	c.load('pbr');
-	let ips = user_ips(ctx);
-	for (let line in split(data, '\n')) {
-		let f = split(line, '\t');
-		if (length(f) < 6)
-			continue;
-		let cn = match(f[5], /\/CN=([^\/]+)/);
-		let status = (f[0] == 'R') ? 'revoked' : 'valid';
-		push(res, {
-			cn: cn ? cn[1] : f[5],
-			serial: f[3],
-			status,
-			expires: fmt_date(f[1]),
-			revoked: f[2] ? fmt_date(f[2]) : null,
-			has_p12: (cn && fs.access(ctx.clients + '/' + cn[1] + '.p12')) ? true : false,
-			has_key: (cn && fs.access(ctx.clients + '/' + cn[1] + '.key')) ? true : false,
-			has_crt: (cn && fs.access(ctx.pki + '/newcerts/' + f[3] + '.pem')) ? true : false,
-			ip: cn ? (ips[cn[1]] ?? '') : '',
-			via: (cn && status == 'valid') ? via_of(c, ctx, cn[1]) : ''
-		});
-	}
-	return res;
-}
-
 /* via = '' removes the policy (the user goes out through the default route) */
 function apply_route(ctx, cn, ip, via) {
 	if (via && !valid_via(via))
@@ -507,6 +472,41 @@ function apply_route(ctx, cn, ip, via) {
 	if (was_client || exit_cn)
 		exit_sync();
 	return exit.warning ? { ok: true, warning: exit.warning } : { ok: true };
+}
+
+function read_index(ctx) {
+	let res = [];
+	let data = fs.readfile(ctx.pki + '/index.txt');
+	if (!data)
+		return res;
+
+	let c = cursor();
+	c.load('pbr');
+	let ips = user_ips(ctx);
+	for (let line in split(data, '\n')) {
+		let f = split(line, '\t');
+		if (length(f) < 6)
+			continue;
+		let cn = match(f[5], /\/CN=([^\/]+)/);
+		let status = (f[0] == 'R') ? 'revoked' : 'valid';
+		push(res, {
+			cn: cn ? cn[1] : f[5],
+			serial: f[3],
+			status,
+			expires: fmt_date(f[1]),
+			revoked: f[2] ? fmt_date(f[2]) : null,
+			has_p12: (cn && fs.access(ctx.clients + '/' + cn[1] + '.p12')) ? true : false,
+			has_key: (cn && fs.access(ctx.clients + '/' + cn[1] + '.key')) ? true : false,
+			has_crt: (cn && fs.access(ctx.pki + '/newcerts/' + f[3] + '.pem')) ? true : false,
+			ip: cn ? (ips[cn[1]] ?? '') : '',
+			via: (cn && status == 'valid') ? via_of(c, ctx, cn[1]) : ''
+		});
+	}
+	return res;
+}
+
+function valid_cn(cn) {
+	return type(cn) == 'string' && length(cn) <= 64 && match(cn, /^[A-Za-z0-9._-]+$/) != null;
 }
 
 function make_vhost_id(c, domain) {
