@@ -52,7 +52,8 @@ fi
 
 # Versions 0.261113.* ran an "exit through another client" service: stop what an upgrade leaves behind.
 if [ -z "$${root}" ]; then
-	pkill -f 'ocserv-exit watch' 2>/dev/null
+	ubus call service delete '{"name":"ocserv-exit"}' >/dev/null 2>&1
+	for p in $$(ps | grep '[o]cserv-exit watch' | awk '{print $$1}'); do kill "$$p" 2>/dev/null; done
 	while ip rule del prio 1499 2>/dev/null; do :; done
 	while ip rule del prio 1500 2>/dev/null; do :; done
 	rm -f /etc/rc.d/*ocserv-exit /var/run/ocserv-exit.count
