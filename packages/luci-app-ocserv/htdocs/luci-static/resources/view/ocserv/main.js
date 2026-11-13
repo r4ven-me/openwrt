@@ -198,7 +198,14 @@ return L.view.extend({
 		o.remove = function() { return false; };
 		o.write = function() { return false; };
 
-		return m.render().then(node => E([ node, E('div', { 'class': 'cbi-section' }, base.serviceControl()) ]));
+		this.svc = base.serviceControl(enabled => {
+			const found = m.lookupOption('enable', 'config');
+			const ui_el = found && found[0].getUIElement(found[1]);
+			if (ui_el)
+				ui_el.setValue(enabled ? '1' : '0');
+		});
+
+		return m.render().then(node => E([ node, E('div', { 'class': 'cbi-section' }, this.svc) ]));
 	},
 
 	handleSave(ev) {
@@ -225,6 +232,7 @@ return L.view.extend({
 	},
 
 	handleSaveApply(ev) {
-		return base.handleSaveApply(this, ev);
+		/* Save & Apply may have started, stopped or (de)activated the service: redraw its buttons */
+		return base.handleSaveApply(this, ev).then(() => this.svc && this.svc.refresh());
 	}
 });

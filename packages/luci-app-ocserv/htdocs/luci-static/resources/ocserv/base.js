@@ -119,8 +119,10 @@ return baseclass.extend({
 
 	/* "Service Control" row like on the pbr page: Start / Restart / Stop and Enable / Disable (start
 	   on boot) of the ocserv init script. Restart and Stop drop every VPN session, including the
-	   one the administrator may be using, so they ask first. */
-	serviceControl() {
+	   one the administrator may be using, so they ask first. Enable / Disable also write the "Enable
+	   server" flag of the settings (UCI ocserv.config.enable), so that Save & Apply agrees with them;
+	   syncFlag(enabled) lets the form show the new value. */
+	serviceControl(syncFlag) {
 		const box = E('div', { 'class': 'cbi-value-field' });
 		const row = E('div', { 'class': 'cbi-value' }, [ E('label', { 'class': 'cbi-value-title' }, _('Service Control')), box ]);
 
@@ -151,7 +153,16 @@ return baseclass.extend({
 			draw({ running: !!st.running, enabled: !!st.enabled });
 		}, () => draw({ running: false, enabled: false }));
 
-		const run = (action) => withTimeout(callRcInit('ocserv', action), 20000, _('The service did not answer in time.'))
+		const setFlag = (enabled) => uci.load('ocserv').then(() => {
+			uci.set('ocserv', 'config', 'enable', enabled ? '1' : '0');
+			return uci.save();
+		}).then(() => callUciCommit('ocserv')).then(() => {
+			if (syncFlag)
+				syncFlag(enabled);
+		});
+
+		const run = (action) => (action == 'enable' || action == 'disable' ? setFlag(action == 'enable') : Promise.resolve())
+			.then(() => withTimeout(callRcInit('ocserv', action), 20000, _('The service did not answer in time.')))
 			.then(() => ui.addNotification(null, E('p', _('Done: %s.').format(action)), 'info'),
 				/* the answer never arrives when the session ran through the stopped service */
 				() => ui.addNotification(null, E('p', _('No answer from the router. If you are connected through this VPN, reconnect, then reload the page.')), 'warning'))
@@ -159,6 +170,7 @@ return baseclass.extend({
 			.then(refresh);
 
 		refresh();
+		row.refresh = refresh;
 		return row;
 	},
 
