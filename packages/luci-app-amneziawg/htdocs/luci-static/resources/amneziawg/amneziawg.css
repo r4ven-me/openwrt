@@ -1,0 +1,31 @@
+/* Peer table layout of the AmneziaWG views. */
+
+.awg-table {
+	width: 100%;
+	table-layout: auto;
+}
+
+/* cells stay on one line: wrapped endpoints, traffic and headers look broken */
+.awg-table .th,
+.awg-table .td {
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+.awg-table .td.awg-actions {
+	text-align: right;
+}
+
+.awg-table .td.awg-actions .cbi-button {
+	margin: 1px 0 1px 4px;
+}
+
+.awg-table select {
+	min-width: 9em;
+	max-width: 14em;
+}
+
+/* narrow screens: a wide table scrolls instead of crushing the columns */
+.awg-scroll {
+	overflow-x: auto;
+}

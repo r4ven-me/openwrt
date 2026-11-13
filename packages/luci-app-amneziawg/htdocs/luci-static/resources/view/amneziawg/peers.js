@@ -174,7 +174,7 @@ return L.view.extend({
 				p.dest.length ? p.dest.join(', ') : E('em', _('any')), ' ',
 				E('button', { 'class': 'btn cbi-button', 'click': () => this.editDest(p) }, _('Edit'))
 			]) : null,
-			E('td', { 'class': 'td nowrap' }, [
+			E('td', { 'class': 'td awg-actions' }, [
 				E('button', { 'class': 'btn cbi-button', 'click': () => this.showConfig(p.name) }, _('Config / QR')),
 				' ',
 				E('button', {
@@ -188,11 +188,12 @@ return L.view.extend({
 			_('Name'), _('Address'), _('Endpoint'), _('Last handshake'), _('Traffic'), _('Enabled'), _('Exit interface')
 		].concat(data.filter ? [ _('Allowed destinations') ] : [], [ '' ]);
 
-		return E('table', { 'class': 'table' }, [
+		awg.loadStyles();
+		return E('div', { 'class': 'awg-scroll' }, E('table', { 'class': 'table awg-table' }, [
 			E('tr', { 'class': 'tr table-titles' }, head.map(h => E('th', { 'class': 'th' }, h)))
 		].concat(rows.length ? rows : [
 			E('tr', { 'class': 'tr placeholder' }, E('td', { 'class': 'td', 'colspan': cols }, E('em', _('No peers yet.'))))
-		]));
+		])));
 	},
 
 	renderAdd() {

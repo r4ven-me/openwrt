@@ -75,6 +75,15 @@ return baseclass.extend({
 		return E('button', { 'class': 'btn cbi-button ' + (cls || ''), 'click': fn }, label);
 	},
 
+	/* the peer table styles, loaded once per page */
+	loadStyles: function() {
+		if (document.getElementById('awg-css'))
+			return;
+		document.head.appendChild(E('link', {
+			'id': 'awg-css', 'rel': 'stylesheet', 'href': L.resource('amneziawg/amneziawg.css')
+		}));
+	},
+
 	/* "Service Control" row: Start / Restart / Stop and Enable / Disable (start on boot), like the pbr page.
 	   state = { running, enabled }; run(action) performs the call. Stop and Restart cut the tunnels. */
 	serviceRow: function(state, run) {
