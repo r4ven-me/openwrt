@@ -1,7 +1,7 @@
 #!/bin/bash
 # Runs inside the container: picks the latest .apk per package from /dist and /dist-awg and writes a signed repo into /out
 set -euo pipefail
-APK=~/sdk/staging_dir/host/bin/apk
+APK=${APK:-~/sdk/staging_dir/host/bin/apk}
 mkdir -p /out
 rm -f /out/*.apk /out/packages.adb
 declare -A latest

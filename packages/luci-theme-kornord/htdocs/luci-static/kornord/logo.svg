@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Kornord raven</title>
+  <rect width="64" height="64" rx="14" fill="#3b4252"/>
+  <path fill="none" stroke="#4c566a" stroke-width="2.6" stroke-linecap="round" d="M20 57.500H50"/>
+  <path fill="none" stroke="#88c0d0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M31 45.500 29.500 56.500M37.500 44 38 56.500"/>
+  <path fill="#88c0d0" d="M60.500 20.500C57 17.200 54 15.400 50.500 14.800 48.200 11.600 42.800 11.600 40.600 15.600 38.500 20 33 24 26 29 18 34.500 10.500 42.500 4.500 53L10.500 53.500 17.500 50.500C26.500 49.500 35.500 47 41 41 45 37 46.500 31 48.500 25.500 49.500 23.500 50.500 22.200 52 21.600Z"/>
+  <path fill="none" stroke="#3b4252" stroke-width="1.600" stroke-linecap="round" d="M38.500 33C30.500 36 22.500 42 16 49.500"/>
+  <circle cx="45.600" cy="16.300" r="1.500" fill="#2e3440"/>
+</svg>

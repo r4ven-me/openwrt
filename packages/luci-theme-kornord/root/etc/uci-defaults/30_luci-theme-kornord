@@ -1,0 +1,28 @@
+#!/bin/sh
+
+changed=0
+
+set_opt() {
+	local key=$1
+	local val=$2
+
+	if ! uci -q get "luci.$key" >/dev/null 2>&1; then
+		uci set "luci.$key=$val"
+		changed=1
+	fi
+}
+
+set_opt themes.Kornord /luci-static/kornord
+
+if [ "$PKG_UPGRADE" != 1 ] && [ $changed = 1 ]; then
+	uci set luci.main.mediaurlbase=/luci-static/kornord
+fi
+
+set_opt themes.KornordDark /luci-static/kornord-dark
+set_opt themes.KornordLight /luci-static/kornord-light
+
+if [ $changed = 1 ]; then
+	uci commit luci
+fi
+
+exit 0

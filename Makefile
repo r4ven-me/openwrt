@@ -1,6 +1,7 @@
 IMAGE := luci-app-ocserv-build
 IMAGE_AWG := luci-app-amneziawg-build
-KORNORD_THEME ?= /home/lans/Cloud/Projects/public/kornord/luci-theme-kornord
+IMAGE_SIGN := luci-app-r4ven-sign
+KORNORD_THEME ?= $(CURDIR)/packages/luci-theme-kornord
 
 KDBX ?= /home/lans/Home/Webdav/KeePass/keepasshome.kdbx
 ENTRY ?= 09. CRYPT/r4ven-apk.pem
@@ -17,7 +18,7 @@ chmod 600 "$$tmp/r4ven-apk.pem"; \
 $(1)
 endef
 
-.PHONY: build build-awg publish publish-push clean
+.PHONY: build build-awg publish publish-push release clean
 
 build:
 	docker build -f build/Dockerfile -t $(IMAGE) .
@@ -55,5 +56,17 @@ publish-push:
 	git -C "$$tmp/w" commit -q -m "Publish $(RELEASE)/$(ARCH)"; \
 	git -C "$$tmp/w" push origin gh-pages
 
+# CI flow: a `v*` tag makes GitHub Actions build UNSIGNED apks into a GitHub Release (.github/workflows/build.yml).
+# This target downloads them, signs the apks and the index with the key from KeePassXC (the key never leaves this
+# machine) and pushes gh-pages. Usage: make release TAG=v1.2.3
+release:
+	test -n "$(TAG)" || { echo "usage: make release TAG=vX" >&2; exit 1; }
+	rm -rf dist-release release-empty; mkdir -p dist-release release-empty repo-out/$(RELEASE)/$(ARCH)
+	gh release download "$(TAG)" --dir dist-release
+	chmod +x dist-release/apk-host
+	docker build -f build/Dockerfile.sign -t $(IMAGE_SIGN) build
+	@$(call with_signing_key,docker run --rm -v $(CURDIR)/dist-release/apk-host:/usr/local/bin/apk:ro -v $(CURDIR)/dist-release:/dist -v $(CURDIR)/release-empty:/dist-awg:ro -v $(CURDIR)/build/sign.sh:/sign.sh:ro -v $(CURDIR)/build/publish.sh:/publish.sh:ro -v "$$tmp":/keys:ro -v $(CURDIR)/repo-out/$(RELEASE)/$(ARCH):/out $(IMAGE_SIGN) /sign.sh)
+	$(MAKE) publish-push
+
 clean:
-	rm -rf dist/* dist-awg/*
+	rm -rf dist/* dist-awg/* dist-release release-empty

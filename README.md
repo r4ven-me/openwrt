@@ -12,7 +12,7 @@ Source packages for OpenWrt 25.12 (apk) and the tooling that builds and publishe
 | `packages/luci-app-amneziawg` | `luci-app-amneziawg-r4ven-me` | LuCI peer management UI |
 | `packages/luci-i18n-amneziawg-ru-r4ven-me` | `luci-i18n-amneziawg-ru-r4ven-me` | Russian translation for the AmneziaWG UI |
 | `packages/luci-app-ocserv` | `luci-app-ocserv-r4ven-me` | LuCI UI for the OpenConnect VPN server (ocserv) |
-| external `luci-theme-kornord` source | `luci-theme-kornord-r4ven-me` | Kornord LuCI theme |
+| `packages/luci-theme-kornord` | `luci-theme-kornord-r4ven-me` | Kornord LuCI theme (copy of github.com/r4ven-me/kornord, MIT, see its `LICENSE`) |
 
 Each directory is a regular OpenWrt package recipe, so the repo can also be used as a feed (`src-link r4ven /path/to/this/repo`).
 
@@ -49,7 +49,18 @@ chain nodes and restart of `oc*` interfaces after the sysctl change. Speed diffe
 - `tests/` - LuCI view render tests (`node tests/view-render.js`)
 - `keys/` - public apk signing key (the private key lives only in KeePassXC)
 
+## Release flow (CI builds, you sign)
+
+1. Push a tag: `git tag v1.2.3 && git push origin v1.2.3`. GitHub Actions (`.github/workflows/build.yml`) builds
+   **unsigned** apks in the OpenWrt SDK and puts them, with the SDK's `apk` tool (`apk-host`), into a GitHub Release.
+2. On the maintainer's machine: `make release TAG=v1.2.3`. It downloads the release, signs the apks and the index
+   with the `r4ven-apk` key from KeePassXC (the key never leaves this machine) and pushes `gh-pages`.
+
+`make build`, `make build-awg` and `make publish` still work as the local fallback.
+
 ## Make targets
+
+- `make release TAG=vX` - sign the apks of a CI release, build the signed index, push `gh-pages`
 
 - `make build` - build `luci-app-ocserv-r4ven-me` into `dist/`
 - `make build-awg` - build the AmneziaWG packages and external Kornord theme into `dist-awg/`

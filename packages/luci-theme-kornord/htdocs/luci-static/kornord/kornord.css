@@ -1,0 +1,486 @@
+/*
+ * Kornord for LuCI: Nord colors on top of the stock Bootstrap theme.
+ * Only CSS variables defined in cascade.css are overridden.
+ * Licensed under the Apache License 2.0.
+ */
+
+/* Light: Snow Storm backgrounds, Polar Night text, darkened accents for contrast */
+:root {
+	--background-color-h: 219;
+	--background-color-s: 28%;
+	--background-color-l: 95%;
+	--border-color-h: 219;
+	--border-color-s: 16%;
+
+	--text-color-highest: #2e3440;
+	--text-color-high: #3b4252;
+	--text-color-medium: #4c566a;
+	--text-color-low: #7b88a1;
+
+	--primary-color-high: #4c6f98;
+	--primary-color-medium: #3d6089;
+	--primary-color-low: #345479;
+	--on-primary-color: #eceff4;
+
+	--error-color-high-rgb: 168, 67, 77;
+	--error-color-medium: #9a3b45;
+	--error-color-low: #8c343e;
+
+	--success-color-high-rgb: 79, 122, 61;
+	--success-color-medium: #456d35;
+	--success-color-low: #3b602d;
+
+	--warn-color-high: #ebcb8b;
+	--warn-color-medium: #e0bf7c;
+	--warn-color-low: #d4b26e;
+}
+
+/* Dark: Polar Night backgrounds, Snow Storm text, Frost/Aurora accents */
+:root[data-darkmode="true"] {
+	--background-color-h: 220;
+	--background-color-s: 16%;
+	--background-color-l: 22%;
+	--border-color-h: 220;
+	--border-color-s: 16%;
+
+	--text-color-highest: #eceff4;
+	--text-color-high: #d8dee9;
+	--text-color-medium: #a9b4c6;
+	--text-color-low: #7b88a1;
+
+	--primary-color-high: #88c0d0;
+	--primary-color-medium: #7aaebd;
+	--primary-color-low: #6c9cab;
+	--on-primary-color: #2e3440;
+
+	--error-color-high-rgb: 191, 97, 106;
+	--error-color-medium: #b25760;
+	--error-color-low: #a54f58;
+
+	--success-color-high-rgb: 163, 190, 140;
+	--success-color-medium: #94b07d;
+	--success-color-low: #86a26f;
+
+	--warn-color-high: #ebcb8b;
+	--warn-color-medium: #dfbf7f;
+	--warn-color-low: #d3b373;
+}
+
+/* Top bar and its dropdowns: hardcoded greys in cascade.css, replaced with Polar Night */
+header {
+	background: linear-gradient(#3b4252, #2e3440);
+	color: #d8dee9;
+}
+
+header a {
+	color: #d8dee9;
+}
+
+header .brand,
+header .brand:hover,
+header ul .active > a {
+	color: #eceff4;
+}
+
+.nav .active > a {
+	background-color: rgba(46, 52, 64, .6);
+}
+
+.nav .dropdown-menu {
+	background-color: #3b4252;
+}
+
+.nav .dropdown-menu a.menu,
+.nav .dropdown-menu .active a {
+	color: #eceff4;
+}
+
+.nav .dropdown-menu li a {
+	color: #b7c1d1;
+}
+
+.nav .dropdown-menu li a:hover {
+	background: #434c5e;
+	color: #eceff4;
+}
+
+/* Show/Hide section toggles (button.label) blended into the background */
+button.label {
+	padding: 3px 8px 2px;
+	color: var(--text-color-highest);
+	background: linear-gradient(var(--background-color-high), var(--background-color-low));
+	border: 1px solid var(--border-color-high);
+	cursor: pointer;
+}
+
+button.label.notice {
+	color: var(--on-primary-color);
+	background: linear-gradient(var(--primary-color-medium), var(--primary-color-low));
+	border-color: var(--primary-color-high);
+}
+
+/* Layers: page < content card < top bar, so blocks do not blend together */
+:root {
+	--kn-page: #d8dee9;
+	--kn-card-border: #b8c1ce;
+	--kn-header-line: #1f242d;
+}
+
+:root[data-darkmode="true"] {
+	--kn-page: #242933;
+	--kn-card-border: #434c5e;
+	--kn-header-line: #4c566a;
+}
+
+body {
+	background-color: var(--kn-page);
+}
+
+.container {
+	background: var(--background-color-high);
+	border: 1px solid var(--kn-card-border);
+	border-radius: 6px;
+	padding: 16px 18px;
+	margin-bottom: 15px;
+	overflow-x: auto;
+}
+
+.tabs, .cbi-tabmenu {
+	margin-left: 0;
+	margin-right: 0;
+}
+
+.cbi-page-actions {
+	margin-left: -18px;
+	margin-right: -18px;
+	margin-bottom: -16px;
+	border-top: 1px solid var(--kn-card-border);
+	border-radius: 0 0 5px 5px;
+}
+
+header {
+	border-bottom: 2px solid var(--kn-header-line);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+}
+
+:root[data-darkmode="true"] header {
+	background: linear-gradient(#434c5e, #3b4252);
+}
+
+footer {
+	border-top-color: var(--kn-card-border);
+}
+
+/* AmneziaWG marks unsaved cells with an inline orange background; recolor it to Nord yellow */
+.td[style*="rgba(255,170,0,.25)"],
+.td[style*="rgba(255, 170, 0, 0.25)"] {
+	background: rgba(235, 203, 139, .14) !important;
+	box-shadow: inset 0 0 0 1px rgba(235, 203, 139, .5);
+}
+
+:root:not([data-darkmode="true"]) .td[style*="rgba(255,170,0,.25)"],
+:root:not([data-darkmode="true"]) .td[style*="rgba(255, 170, 0, 0.25)"] {
+	background: rgba(201, 166, 77, .18) !important;
+	box-shadow: inset 0 0 0 1px rgba(168, 130, 40, .55);
+}
+
+/* luci-app-dockerman overview tiles: hardcoded dark-on-light inline styles,
+   unreadable against a dark background. Only patch dark mode; the light
+   values already assume a light card and read fine there. */
+:root[data-darkmode="true"] div[style*="border: 1px solid #ddd"] {
+	border-color: var(--kn-card-border) !important;
+}
+
+:root[data-darkmode="true"] div[style*="color: #333"] {
+	color: var(--text-color-highest) !important;
+}
+
+:root[data-darkmode="true"] span[style*="color: #666"] {
+	color: var(--text-color-medium) !important;
+}
+
+/* Long unbroken values (JSON blobs etc.) wrap inside their cell instead of
+   stretching the row past the card. Scoped to the 2nd+ cell in a row so the
+   narrow first column (usually a label) keeps its natural width — applying
+   this to every cell let the label column collapse to near-zero width. */
+.table .tr > .td:nth-child(n+2),
+.table .tr > .th:nth-child(n+2) {
+	overflow-wrap: anywhere;
+}
+
+/* luci-app-filemanager injects hardcoded light colors after the theme has
+   loaded. Scope higher-specificity overrides to the app so its table, status
+   bar and editor follow Kornord in both color modes. */
+#file-manager-container {
+	color: var(--text-color-high);
+}
+
+#file-manager-container #file-list-container {
+	background-color: var(--background-color-high);
+	border-color: var(--kn-card-border);
+}
+
+#file-manager-container #file-table {
+	background-color: var(--background-color-high);
+	color: var(--text-color-high);
+}
+
+#file-manager-container #file-table th {
+	background-color: var(--background-color-low);
+	color: var(--text-color-highest);
+	border-right-color: var(--border-color-high);
+	border-bottom: 1px solid var(--border-color-high);
+}
+
+#file-manager-container #file-table td {
+	background-color: transparent;
+	color: var(--text-color-high);
+	border-right-color: var(--border-color-medium);
+	border-bottom: 1px solid var(--border-color-low);
+}
+
+#file-manager-container #file-table tbody tr:hover,
+#file-manager-container #file-table tbody tr:hover td {
+	background-color: var(--background-color-medium) !important;
+}
+
+#file-manager-container #file-table .directory-link,
+#file-manager-container #file-table .file-link,
+#file-manager-container #file-table .symlink-name,
+#file-manager-container #file-table tbody > tr:first-child a {
+	color: var(--primary-color-high) !important;
+}
+
+#file-manager-container #file-table .resizer::after {
+	background-color: var(--border-color-high);
+}
+
+#file-manager-container #file-table .sort-button {
+	background-color: var(--background-color-medium);
+	border-color: var(--border-color-high);
+	color: var(--text-color-highest);
+}
+
+#file-manager-container #file-table .sort-button:hover {
+	background-color: var(--primary-color-high);
+	border-color: var(--primary-color-high);
+	color: var(--on-primary-color);
+}
+
+#file-manager-container #file-table .sort-button:focus-visible {
+	outline: 2px solid var(--primary-color-high);
+	outline-offset: 1px;
+}
+
+#file-manager-container #status-bar {
+	background-color: var(--background-color-medium);
+	border-color: var(--kn-card-border);
+	color: var(--text-color-high);
+}
+
+#file-manager-container .cbi-progressbar {
+	background-color: var(--background-color-low);
+	border: 1px solid var(--border-color-medium);
+}
+
+#file-manager-container .cbi-progressbar > div {
+	background-color: var(--primary-color-high);
+}
+
+#file-manager-container #file-list-container.drag-over {
+	background-color: rgba(136, 192, 208, .12);
+	border-color: var(--primary-color-high);
+}
+
+#file-manager-container #drag-overlay {
+	background-color: rgba(136, 192, 208, .18);
+	color: var(--primary-color-high);
+}
+
+#file-manager-container #editor-container .editor-container {
+	background-color: var(--background-color-low);
+	border: 1px solid var(--kn-card-border);
+	border-radius: 5px;
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08);
+}
+
+#file-manager-container #editor-container .editor-container:focus-within {
+	border-color: var(--primary-color-high);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color-high) 25%, transparent);
+}
+
+#file-manager-container #editor-container .editor-content {
+	background-color: var(--background-color-low);
+	color: var(--text-color-highest);
+	min-height: 0;
+}
+
+#file-manager-container #editor-container #editor-textarea {
+	background-color: var(--background-color-low) !important;
+	color: var(--text-color-highest);
+	caret-color: var(--primary-color-high);
+	padding: 12px 14px !important;
+	outline: none;
+}
+
+#file-manager-container #editor-container #editor-textarea::selection {
+	background-color: var(--primary-color-high);
+	color: var(--on-primary-color);
+}
+
+#file-manager-container #editor-container .line-numbers {
+	background-color: var(--background-color-medium);
+	border-right-color: var(--border-color-high);
+	color: var(--text-color-medium);
+	padding-top: 12px;
+}
+
+#file-manager-container #editor-container .editor-container > .cbi-page-actions {
+	background-color: var(--background-color-medium) !important;
+	border-top: 1px solid var(--kn-card-border) !important;
+	padding: 10px 12px !important;
+}
+
+/* The bundled HexEditor defines a standalone light palette on :root. Local
+   custom properties keep it readable without changing the application code. */
+#file-manager-container #hexedit-container .hexedit {
+	--clr-background: var(--background-color-low);
+	--clr-selected: var(--background-color-high);
+	--clr-selected-editing: var(--primary-color-high);
+	--clr-non-printable: var(--text-color-medium);
+	--clr-border: var(--border-color-high);
+	--clr-offset: var(--text-color-medium);
+	--clr-header: var(--text-color-highest);
+	--clr-highlight: var(--warn-color-high);
+	--clr-cursor-active: var(--primary-color-high);
+	--clr-cursor-passive: var(--background-color-high);
+	background-color: var(--background-color-low);
+	border-color: var(--kn-card-border);
+	color: var(--text-color-high);
+}
+
+#file-manager-container #hexedit-container .hexedit-search-container {
+	background-color: var(--background-color-medium);
+	border-bottom-color: var(--kn-card-border);
+}
+
+#file-manager-container #hexedit-container .hexedit-search-input {
+	background-color: var(--background-color-low);
+	border-color: var(--border-color-high);
+	color: var(--text-color-highest);
+}
+
+#file-manager-container #hexedit-container .hexedit-search-input::placeholder {
+	color: var(--text-color-medium);
+	opacity: 1;
+}
+
+#file-manager-container #hexedit-container .hexedit-search-input:focus {
+	border-color: var(--primary-color-high);
+	box-shadow: 0 0 0 2px rgba(136, 192, 208, .2);
+	outline: none;
+}
+
+#file-manager-container #hexedit-container .hexedit-search-status {
+	color: var(--text-color-high);
+}
+
+#file-manager-container #hexedit-container .hexedit-search-button {
+	background-color: var(--primary-color-medium);
+	border: 1px solid var(--primary-color-high);
+	color: var(--on-primary-color);
+}
+
+#file-manager-container #hexedit-container .hexedit-search-button:hover {
+	background-color: var(--primary-color-high);
+}
+
+#file-manager-container #hexedit-container .hexedit-search-button:focus-visible {
+	outline: 2px solid var(--primary-color-high);
+	outline-offset: 2px;
+}
+
+#file-manager-container #hexedit-container .hexedit-headers {
+	background-color: var(--background-color-medium);
+	border-color: var(--border-color-high);
+}
+
+#file-manager-container #hexedit-container .offsets-header,
+#file-manager-container #hexedit-container .hexview-header,
+#file-manager-container #hexedit-container .textview-header {
+	color: var(--text-color-highest);
+	border-color: var(--border-color-high);
+}
+
+#file-manager-container #hexedit-container .hexedit-content {
+	background-color: var(--background-color-low);
+	border-color: var(--border-color-high);
+	scrollbar-color: var(--border-color-high) var(--background-color-low);
+}
+
+#file-manager-container #hexedit-container .offsets {
+	background-color: var(--background-color-medium);
+	color: var(--text-color-medium);
+}
+
+#file-manager-container #hexedit-container .hexview,
+#file-manager-container #hexedit-container .textview {
+	background-color: var(--background-color-low);
+	color: var(--text-color-highest);
+}
+
+#file-manager-container #hexedit-container .offsets,
+#file-manager-container #hexedit-container .hexview,
+#file-manager-container #hexedit-container .textview,
+#file-manager-container #hexedit-container .hexview:focus,
+#file-manager-container #hexedit-container .textview:focus {
+	border-color: var(--border-color-high);
+}
+
+#file-manager-container #hexedit-container .hexview:focus,
+#file-manager-container #hexedit-container .textview:focus {
+	background-color: var(--background-color-medium);
+}
+
+#file-manager-container #hexedit-container .selected,
+#file-manager-container #hexedit-container .passive-view-cursor {
+	background-color: var(--background-color-high);
+	color: var(--text-color-highest);
+}
+
+#file-manager-container #hexedit-container .selected-editing,
+#file-manager-container #hexedit-container .active-view-cursor {
+	animation: none !important;
+	background-color: var(--primary-color-high);
+	color: var(--on-primary-color);
+}
+
+#file-manager-container #hexedit-container .search-highlight,
+#file-manager-container #hexedit-container .highlighted {
+	background-color: var(--warn-color-high);
+	color: #2e3440;
+}
+
+#file-manager-container input[type="checkbox"] {
+	accent-color: var(--primary-color-high);
+}
+
+/* Buttons: no blue glow on hover/focus; keep text readable, lighten slightly instead */
+.btn:hover, .btn:focus,
+.cbi-button:hover, .cbi-button:focus,
+button:hover {
+	border-color: var(--on-color, var(--primary-color-high)) !important;
+	box-shadow: none;
+	color: var(--on-color);
+	filter: brightness(1.12);
+}
+
+:root[data-darkmode="true"] .btn:hover, :root[data-darkmode="true"] .btn:focus,
+:root[data-darkmode="true"] .cbi-button:hover, :root[data-darkmode="true"] .cbi-button:focus,
+:root[data-darkmode="true"] button:hover {
+	filter: brightness(1.15);
+}
+
+.btn:active, .cbi-button:active {
+	filter: brightness(0.95);
+}

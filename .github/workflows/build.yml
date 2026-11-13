@@ -1,0 +1,109 @@
+# Builds UNSIGNED apks. The signing key lives only in KeePassXC on the maintainer's machine:
+# after a tag build, run `make release TAG=vX` there to sign the apks and the index and push gh-pages.
+name: build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # The AmneziaWG "peers" view tests fail on main today; they must not block a release.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tests/view-render.js
+
+  build-ocserv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: build/Dockerfile
+          load: true
+          tags: luci-app-ocserv-build
+          cache-from: type=gha,scope=ocserv
+          cache-to: type=gha,mode=max,scope=ocserv
+      - name: "Build (no signing key, apks stay unsigned)"
+        run: |
+          mkdir -p dist apk-host && chmod 777 dist apk-host
+          docker run --rm \
+            -v "$PWD/packages/luci-app-ocserv:/src:ro" \
+            -v "$PWD/build/build.sh:/build.sh:ro" \
+            -v "$PWD/dist:/out" \
+            luci-app-ocserv-build /build.sh
+          # The SDK's own apk tool: the maintainer signs the apks with it locally.
+          docker run --rm -v "$PWD/apk-host:/o" luci-app-ocserv-build \
+            cp /home/builder/sdk/staging_dir/host/bin/.apk.bin /o/apk-host
+          cp apk-host/apk-host dist/apk-host
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ocserv
+          path: dist/*
+          if-no-files-found: error
+
+  build-awg:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: build/Dockerfile.awg
+          load: true
+          tags: luci-app-amneziawg-build
+          cache-from: type=gha,scope=awg
+          cache-to: type=gha,mode=max,scope=awg
+      - name: "Build (no signing key, apks stay unsigned)"
+        run: |
+          mkdir -p dist-awg && chmod 777 dist-awg
+          docker run --rm \
+            -v "$PWD/packages/luci-app-amneziawg:/src:ro" \
+            -v "$PWD/packages/luci-proto-amneziawg:/src-proto:ro" \
+            -v "$PWD/packages/luci-i18n-amneziawg-ru-r4ven-me:/src-i18n:ro" \
+            -v "$PWD/packages/luci-theme-kornord:/src-theme:ro" \
+            -v "$PWD/build/build-awg.sh:/build.sh:ro" \
+            -v "$PWD/dist-awg:/out" \
+            luci-app-amneziawg-build /build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: awg
+          path: dist-awg/*.apk
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-ocserv, build-awg]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - run: ls -la release
+      - name: "Create the GitHub Release (unsigned apks + apk-host)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "Unsigned apks. Sign and publish locally: make release TAG=${GITHUB_REF_NAME}"

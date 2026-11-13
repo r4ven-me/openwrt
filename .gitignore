@@ -5,3 +5,5 @@ repo-out/
 .serena/
 .claude/
 .claude/settings.local.json
+dist-release/
+release-empty/

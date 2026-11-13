@@ -1,0 +1,5 @@
+# Tiny image for signing release apks locally with the SDK's own `apk` binary (the `apk-host` asset of the
+# GitHub Release). Same distribution as the SDK image, so the binary runs here.
+FROM debian:13-slim
+RUN apt-get update && apt-get install -y --no-install-recommends libssl3 zstd ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
