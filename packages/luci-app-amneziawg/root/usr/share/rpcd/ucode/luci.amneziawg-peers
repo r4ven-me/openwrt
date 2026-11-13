@@ -602,6 +602,8 @@ const methods = {
 				address: c.get('network', srv.iface, 'addresses')?.[0] ?? null,
 				port: +(c.get('network', srv.iface, 'listen_port') ?? 0),
 				up: length(out('awg show ' + sh(srv.iface))) > 0,
+				/* netifd starts the interface on boot unless auto is 0 */
+				auto: c.get('network', srv.iface, 'auto') != '0',
 				pbr: fs.access('/etc/init.d/pbr') ? true : false,
 				filter: srv.filter == '1',
 				peers,
@@ -889,6 +891,39 @@ const methods = {
 				if (('' + old_obf[k]) != o[k])
 					changed = true;
 			return { ok: true, clients_need_update: changed };
+		}
+	},
+
+	/* start / stop / restart bring the server interface up or down; enable / disable set its start on boot */
+	service: {
+		args: { action: 'restart' },
+		call: function(req) {
+			let action = req.args.action;
+			let c = ctx();
+			c.load('amneziawg');
+			let srv = server_of(c);
+			if (!srv)
+				return { error: 'Not configured' };
+
+			if (action == 'start')
+				run([ '/sbin/ifup', srv.iface ]);
+			else if (action == 'stop')
+				run([ '/sbin/ifdown', srv.iface ]);
+			else if (action == 'restart') {
+				run([ '/sbin/ifdown', srv.iface ]);
+				run([ '/sbin/ifup', srv.iface ]);
+			}
+			else if (action == 'enable' || action == 'disable') {
+				c.load('network');
+				if (action == 'enable')
+					c.delete('network', srv.iface, 'auto');
+				else
+					c.set('network', srv.iface, 'auto', '0');
+				c.commit('network');
+			}
+			else
+				return { error: 'Invalid action' };
+			return { ok: true };
 		}
 	},
 

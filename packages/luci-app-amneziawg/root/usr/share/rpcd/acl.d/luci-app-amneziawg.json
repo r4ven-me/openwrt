@@ -17,6 +17,7 @@
 					"set_config",
 					"set_interface",
 					"restart_interface",
+					"service",
 					"change_cidr",
 					"add_peer",
 					"set_peer_address",

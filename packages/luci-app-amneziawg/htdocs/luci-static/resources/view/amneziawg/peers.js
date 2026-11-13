@@ -249,6 +249,8 @@ return L.view.extend({
 				_('address %s, UDP port %d, endpoint %s.').format(data.address || '?', data.port, data.endpoint),
 				' ', _('Server settings are on the Config and Interface pages.')
 			]),
+			awg.serviceRow({ running: data.up, enabled: data.auto !== false },
+				action => this.act(awg.service(action))),
 			E('h3', _('Peers'))
 		].concat(data.pbr ? [] : [
 			E('p', { 'class': 'alert-message warning' },

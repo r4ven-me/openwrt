@@ -21,6 +21,7 @@ return baseclass.extend({
 	setConfig: decl('set_config', [ 'host', 'port', 'dns', 'allowed_ips', 'mtu', 'keepalive', 'obf' ]),
 	setInterface: decl('set_interface', [ 'port', 'mtu', 'obf', 'zones', 'filter' ]),
 	restartInterface: decl('restart_interface'),
+	service: decl('service', [ 'action' ]),
 	changeCidr: decl('change_cidr', [ 'cidr' ]),
 	addPeer: decl('add_peer', [ 'name', 'via', 'address' ]),
 	setPeerAddress: decl('set_peer_address', [ 'name', 'address' ]),
@@ -72,6 +73,31 @@ return baseclass.extend({
 
 	button: function(label, cls, fn) {
 		return E('button', { 'class': 'btn cbi-button ' + (cls || ''), 'click': fn }, label);
+	},
+
+	/* "Service Control" row: Start / Restart / Stop and Enable / Disable (start on boot), like the pbr page.
+	   state = { running, enabled }; run(action) performs the call. Stop and Restart cut the tunnels. */
+	serviceRow: function(state, run) {
+		const btn = (action, label, cls, off, warn) => E('button', {
+			'class': 'btn cbi-button ' + cls,
+			'disabled': off ? '' : null,
+			'click': ui.createHandlerFn(this, () => {
+				if (warn && !confirm(warn))
+					return;
+				return run(action);
+			})
+		}, label);
+
+		return this.row(_('Service Control'), E('div', {}, [
+			btn('start', _('Start'), 'cbi-button-positive', state.running),
+			' ', btn('restart', _('Restart'), 'cbi-button-action', !state.running,
+				_('Restart the interface? Connected clients lose the tunnel for a moment.')),
+			' ', btn('stop', _('Stop'), 'cbi-button-negative', !state.running,
+				_('Stop the interface? Connected clients lose the tunnel until it is started again.')),
+			E('span', { 'style': 'display:inline-block;width:2em' }),
+			btn('enable', _('Enable'), 'cbi-button-neutral', state.enabled),
+			' ', btn('disable', _('Disable'), 'cbi-button-negative', !state.enabled)
+		]));
 	},
 
 	notify: function(text, level) {
