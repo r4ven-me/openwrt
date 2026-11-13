@@ -21,8 +21,8 @@ Each directory is a regular OpenWrt package recipe, so the repo can also be used
 On the router (OpenWrt 25.12, `x86_64`):
 
 ```sh
-wget -O /etc/apk/keys/r4ven-apk.pub https://r4ven-me.github.io/openwrt/r4ven-apk.pub
-echo https://r4ven-me.github.io/openwrt/25.12/x86_64/packages.adb > /etc/apk/repositories.d/r4ven.list
+wget -O /etc/apk/keys/r4ven-apk.pub https://apk.r4ven.me/r4ven-apk.pub
+echo https://apk.r4ven.me/25.12/x86_64/packages.adb > /etc/apk/repositories.d/r4ven.list
 apk update
 apk add luci-app-ocserv-r4ven-me
 ```
